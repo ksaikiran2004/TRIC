@@ -7,7 +7,7 @@ import uuid
 import math
 import time
 from enum import Enum
-from typing import List, Dict, Optional
+from typing import List, Optional
 from dataclasses import dataclass, field
 
 
@@ -22,6 +22,12 @@ class SensorType(Enum):
     INFRARED = "infrared"
 
 
+class SensorStatus(Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    FAULT = "fault"
+
+
 # =========================================================
 # DATA MODELS
 # =========================================================
@@ -30,7 +36,7 @@ class SensorType(Enum):
 class DetectionEvent:
     event_id: str
     sensor_id: str
-    sensor_type: str
+    sensor_type: SensorType
     latitude: float
     longitude: float
     intensity: float
@@ -43,52 +49,55 @@ class ConfirmedEvent:
     latitude: float
     longitude: float
     sensors_triggered: List[str]
+    sensor_types: List[SensorType]
     confidence_score: float
     timestamp: float
 
 
 # =========================================================
-# SENSOR CLASS
+# SENSOR MODEL
 # =========================================================
 
+@dataclass
 class Sensor:
-    """
-    Base Sensor Model
-    """
+    sensor_type: SensorType
+    latitude: float
+    longitude: float
+    detection_radius_m: float
+    sensitivity_threshold: float = 0.5
+    status: SensorStatus = SensorStatus.ACTIVE
+    id: str = field(init=False)
 
-    def __init__(
-        self,
-        sensor_type: SensorType,
-        latitude: float,
-        longitude: float,
-        detection_radius_m: float,
-        sensitivity_threshold: float = 0.5,
-    ):
+    def __post_init__(self):
         self.id = str(uuid.uuid4())
-        self.sensor_type = sensor_type
-        self.latitude = latitude
-        self.longitude = longitude
-        self.detection_radius_m = detection_radius_m
-        self.sensitivity_threshold = sensitivity_threshold
-        self.status = "active"
 
     # -----------------------------------------------------
 
-    def _distance_meters(self, lat: float, lon: float) -> float:
+    @staticmethod
+    def distance_meters(
+        lat1: float,
+        lon1: float,
+        lat2: float,
+        lon2: float
+    ) -> float:
         """
-        Approximate Haversine distance in meters.
+        Haversine distance in meters
         """
-        R = 6371000  # Earth radius in meters
 
-        lat1 = math.radians(self.latitude)
-        lat2 = math.radians(lat)
-        delta_lat = math.radians(lat - self.latitude)
-        delta_lon = math.radians(lon - self.longitude)
+        R = 6371000
+
+        lat1 = math.radians(lat1)
+        lat2 = math.radians(lat2)
+
+        dlat = lat2 - lat1
+        dlon = math.radians(lon2 - lon1)
 
         a = (
-            math.sin(delta_lat / 2) ** 2
-            + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
+            math.sin(dlat / 2) ** 2 +
+            math.cos(lat1) * math.cos(lat2) *
+            math.sin(dlon / 2) ** 2
         )
+
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
         return R * c
@@ -100,31 +109,32 @@ class Sensor:
         lat: float,
         lon: float,
         intensity: float,
+        event_time: float
     ) -> Optional[DetectionEvent]:
-        """
-        Attempt detection based on:
-        - distance
-        - intensity threshold
-        - sensor active status
-        """
 
-        if self.status != "active":
+        if self.status != SensorStatus.ACTIVE:
             return None
 
         if intensity < self.sensitivity_threshold:
             return None
 
-        distance = self._distance_meters(lat, lon)
+        dist = Sensor.distance_meters(
+            self.latitude,
+            self.longitude,
+            lat,
+            lon
+        )
 
-        if distance <= self.detection_radius_m:
+        if dist <= self.detection_radius_m:
+
             return DetectionEvent(
                 event_id=str(uuid.uuid4()),
                 sensor_id=self.id,
-                sensor_type=self.sensor_type.value,
+                sensor_type=self.sensor_type,
                 latitude=lat,
                 longitude=lon,
                 intensity=intensity,
-                timestamp=time.time(),
+                timestamp=event_time
             )
 
         return None
@@ -135,17 +145,21 @@ class Sensor:
 # =========================================================
 
 class AlertEngine:
-    """
-    Handles:
-    - Collection of sensor detections
-    - Cross-verification
-    - Preliminary confirmation
-    """
 
-    def __init__(self, sensors: List[Sensor], min_confirmations: int = 2):
+    MAX_CLUSTER_DISTANCE = 200  # meters
+
+    def __init__(
+        self,
+        sensors: List[Sensor],
+        min_confirmations: int = 2
+    ):
+
         self.sensors = sensors
         self.min_confirmations = min_confirmations
         self.confirmed_events: List[ConfirmedEvent] = []
+
+        # fast lookup for sensors
+        self.sensor_map = {s.id: s for s in sensors}
 
     # -----------------------------------------------------
 
@@ -154,12 +168,20 @@ class AlertEngine:
         lat: float,
         lon: float,
         intensity: float,
+        event_time: float
     ) -> List[DetectionEvent]:
 
         detections: List[DetectionEvent] = []
 
         for sensor in self.sensors:
-            event = sensor.detect(lat, lon, intensity)
+
+            event = sensor.detect(
+                lat,
+                lon,
+                intensity,
+                event_time
+            )
+
             if event:
                 detections.append(event)
 
@@ -167,27 +189,75 @@ class AlertEngine:
 
     # -----------------------------------------------------
 
+    def cluster_filter(
+        self,
+        detections: List[DetectionEvent]
+    ) -> List[DetectionEvent]:
+
+        if not detections:
+            return []
+
+        if detections[0].sensor_id not in self.sensor_map:
+            return []
+
+        base_sensor = self.sensor_map[detections[0].sensor_id]
+
+        # cached coordinates (optimization)
+        base_lat = base_sensor.latitude
+        base_lon = base_sensor.longitude
+
+        cluster: List[DetectionEvent] = []
+
+        for d in detections:
+
+            sensor = self.sensor_map.get(d.sensor_id)
+
+            if sensor is None:
+                continue
+
+            dist = Sensor.distance_meters(
+                base_lat,
+                base_lon,
+                sensor.latitude,
+                sensor.longitude
+            )
+
+            if dist <= self.MAX_CLUSTER_DISTANCE:
+                cluster.append(d)
+
+        return cluster
+
+    # -----------------------------------------------------
+
     def cross_verify(
         self,
         detections: List[DetectionEvent],
+        event_time: float
     ) -> Optional[ConfirmedEvent]:
 
-        if len(detections) < self.min_confirmations:
+        clustered = self.cluster_filter(detections)
+
+        if len(clustered) < self.min_confirmations:
             return None
 
-        sensors_triggered = list(
-            {d.sensor_type for d in detections}
+        sensors_triggered = list({d.sensor_id for d in clustered})
+        sensor_types = list({d.sensor_type for d in clustered})
+
+        confidence_score = round(
+            len(clustered) / self.min_confirmations,
+            3
         )
 
-        confidence_score = len(detections) / len(self.sensors)
+        confidence_score = min(confidence_score, 1.0)
 
         confirmed_event = ConfirmedEvent(
             event_id=str(uuid.uuid4()),
-            latitude=detections[0].latitude,
-            longitude=detections[0].longitude,
+            latitude=clustered[0].latitude,
+            longitude=clustered[0].longitude,
             sensors_triggered=sensors_triggered,
-            confidence_score=round(confidence_score, 3),
-            timestamp=time.time(),
+            sensor_types=sensor_types,
+            confidence_score=confidence_score,
+            timestamp=event_time
         )
 
         self.confirmed_events.append(confirmed_event)
@@ -200,14 +270,16 @@ class AlertEngine:
         self,
         lat: float,
         lon: float,
-        intensity: float,
+        intensity: float
     ) -> Optional[ConfirmedEvent]:
-        """
-        Phase 1 Flow:
-        1. Collect detections
-        2. Cross verify
-        3. Return confirmed preliminary alert
-        """
 
-        detections = self.collect_detections(lat, lon, intensity)
-        return self.cross_verify(detections)
+        event_time = time.time()
+
+        detections = self.collect_detections(
+            lat,
+            lon,
+            intensity,
+            event_time
+        )
+
+        return self.cross_verify(detections, event_time)
