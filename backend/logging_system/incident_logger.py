@@ -14,6 +14,7 @@ from typing import Optional, Dict, Any
 
 from backend.orchestrator.event_manager import ManagedEvent
 from backend.utils.file_lock import file_lock
+from backend.config import Config
 
 
 class IncidentLogger:
@@ -21,7 +22,7 @@ class IncidentLogger:
     Persistent incident storage manager.
     """
 
-    def __init__(self, base_dir: str = "data/incidents"):
+    def __init__(self, base_dir: str = Config.logging.INCIDENTS_DIR):
         self.base_path = Path(base_dir)
         self.base_path.mkdir(parents=True, exist_ok=True)
 
@@ -97,26 +98,26 @@ class IncidentLogger:
         lat, lon = event.location
 
         return {
-            "version": 1,
+            "version": Config.logging.METADATA_VERSION,
             "event_id": event.event_id,
             "track_id": event.track_id,
             "location": [lat, lon],
-            "direction": str(event.direction),   # safe (string already)
+            "direction": str(event.direction),
             "speed": float(event.speed),
             "confidence": float(event.confidence),
             "timestamp": float(event.timestamp),
-            "status": event.status.value,        # Enum → value
+            "status": event.status.value,
         }
 
     def _safe_write(self, file_path: Path, data: Dict[str, Any]) -> None:
         """
         Safely write JSON using atomic write + file lock.
         """
-        temp_path = file_path.with_suffix(".tmp")
+        temp_path = file_path.with_suffix(Config.logging.TEMP_FILE_SUFFIX)
 
         with file_lock(file_path):
             with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=4)
+                json.dump(data, f, indent=Config.logging.JSON_INDENT)
                 f.flush()
 
             temp_path.replace(file_path)
