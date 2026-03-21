@@ -14,6 +14,7 @@ from enum import Enum
 import math
 
 from backend.tracking.path_builder import Path
+from backend.config import Config
 
 
 # =========================================================
@@ -60,15 +61,15 @@ class DirectionResult:
 
 class DirectionClassifier:
 
-    # Thresholds (tunable)
-    MIN_DISTANCE = 1.0             # meters
-    MIN_SPEED = 0.1               # m/s
-    CONFIDENCE_DISTANCE = 50.0    # meters
+    # Thresholds (from Config)
+    MIN_DISTANCE = Config.direction.MIN_DISTANCE
+    MIN_SPEED = Config.direction.MIN_SPEED
+    CONFIDENCE_DISTANCE = Config.direction.CONFIDENCE_DISTANCE
 
     # Optional tuning flags
-    USE_BEARING_STABILITY_GUARD = True
-    USE_CONFIDENCE_FLOOR = False
-    CONFIDENCE_FLOOR = 0.1
+    USE_BEARING_STABILITY_GUARD = Config.direction.USE_BEARING_STABILITY_GUARD
+    USE_CONFIDENCE_FLOOR = Config.direction.USE_CONFIDENCE_FLOOR
+    CONFIDENCE_FLOOR = Config.direction.CONFIDENCE_FLOOR
 
     # -----------------------------------------------------
     # PUBLIC API
