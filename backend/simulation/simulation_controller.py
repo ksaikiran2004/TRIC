@@ -10,17 +10,18 @@ from typing import List, Optional, Callable
 
 from backend.models.sensor_model import Sensor
 from backend.engines.sensor_trigger_engine import simulate_intrusion, SimulationResult
+from backend.config import Config
 
 
 class SimulationController:
     def __init__(
         self,
         sensors: List[Sensor],
-        frequency: float = 2.0,
+        frequency: float = Config.simulation.FREQUENCY,
         seed: Optional[int] = None,
-        jitter: float = 0.2,
-        max_history: int = 1000,
-        border_buffer: float = 0.001,
+        jitter: float = Config.simulation.JITTER,
+        max_history: int = Config.buffer.MAX_HISTORY,
+        border_buffer: float = Config.simulation.BORDER_BUFFER,
         on_result: Optional[Callable[[SimulationResult], None]] = None
     ):
         if not sensors:
@@ -114,7 +115,7 @@ class SimulationController:
             try:
                 if self._pause_event.is_set():
                     while self._pause_event.is_set() and not self._stop_event.is_set():
-                        self._stop_event.wait(timeout=0.1)
+                        self._stop_event.wait(timeout=Config.simulation.PAUSE_SLEEP)
                     continue
 
                 self.run_step()
@@ -147,7 +148,7 @@ class SimulationController:
             return self.frequency
 
         factor = 1 + self._rng.uniform(-self.jitter, self.jitter)
-        return max(0.1, self.frequency * factor)
+        return max(Config.simulation.MIN_INTERVAL, self.frequency * factor)
 
     def _generate_intrusion_point(self) -> tuple:
         lat = self._rng.uniform(
