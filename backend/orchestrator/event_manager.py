@@ -13,10 +13,10 @@ from typing import Dict, List, Tuple
 from enum import Enum
 import uuid
 
-# Assuming these imports exist in your project
 from backend.tracking.intrusion_tracker import IntrusionTrack
 from backend.tracking.path_builder import Path
 from backend.tracking.direction_classifier import DirectionResult
+from backend.config import Config
 
 
 # =========================================================
@@ -111,7 +111,10 @@ class EventManager:
             confidence = (
                 direction_result.confidence
                 if direction_result
-                else min(1.0, speed / 5.0)
+                else min(
+                    Config.event.MAX_CONFIDENCE,
+                    speed / Config.event.SPEED_NORMALIZER
+                )
             )
 
             status = (
