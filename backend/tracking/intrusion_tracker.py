@@ -10,14 +10,15 @@ import time
 
 from backend.models.sensor_model import ConfirmedEvent
 from backend.simulation.simulation_controller import SimulationResult
+from backend.config import Config
 
 
 # =========================================================
 # CONFIG
 # =========================================================
 
-DISTANCE_THRESHOLD_METERS = 150.0
-TIME_THRESHOLD_SECONDS = 10.0
+DISTANCE_THRESHOLD_METERS = Config.tracking.DISTANCE_THRESHOLD
+TIME_THRESHOLD_SECONDS = Config.tracking.TIME_THRESHOLD
 
 
 # =========================================================
