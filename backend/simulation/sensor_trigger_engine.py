@@ -16,6 +16,7 @@ import uuid
 
 from backend.models.sensor_model import ConfirmedEvent
 from backend.alert.alert_engine import AlertEngine
+from backend.config import Config
 
 
 # =========================================================
@@ -61,11 +62,7 @@ def set_seed(seed: int) -> None:
 # CONSTANTS
 # =========================================================
 
-INTENSITY_PROFILE = {
-    "footsteps": (0.2, 0.4),
-    "animal": (0.4, 0.7),
-    "vehicle": (0.7, 1.0),
-}
+INTENSITY_PROFILE = Config.simulation.INTENSITY_PROFILE
 
 
 # =========================================================
@@ -83,7 +80,10 @@ def generate_intensity(simulation_type: SimulationType) -> float:
     intensity = _rng.uniform(low, high)
 
     # Noise floor + scaling
-    noise_scale = max(0.01, 0.02 * intensity)
+    noise_scale = max(
+        Config.simulation.NOISE_FLOOR,
+        Config.simulation.NOISE_SCALE_FACTOR * intensity
+    )
     noise = _rng.gauss(0, noise_scale)
 
     intensity = max(0.0, min(1.0, intensity + noise))
@@ -111,9 +111,18 @@ def simulate_intrusion(
     latency = 0.0
     if simulate_latency:
         if use_gaussian_latency:
-            latency = max(0.01, _rng.gauss(0.1, 0.03))
+            latency = max(
+                Config.simulation.MIN_LATENCY,
+                _rng.gauss(
+                    Config.simulation.GAUSSIAN_LATENCY_MEAN,
+                    Config.simulation.GAUSSIAN_LATENCY_STD
+                )
+            )
         else:
-            latency = _rng.uniform(0.05, 0.2)
+            latency = _rng.uniform(
+                Config.simulation.UNIFORM_LATENCY_MIN,
+                Config.simulation.UNIFORM_LATENCY_MAX
+            )
         time.sleep(latency)
 
     error_msg: Optional[str] = None
