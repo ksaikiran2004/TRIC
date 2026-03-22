@@ -14,7 +14,7 @@ import time
 
 from backend.config import Config
 
-from backend.simulation.sensor_generator import SensorGenerator
+from backend.simulation.sensor_generator import generate_sensor_network
 from backend.confirmation.multi_sensor_confirmation import MultiSensorConfirmation
 from backend.alert.alert_engine import AlertEngine
 from backend.simulation.simulation_controller import SimulationController
@@ -27,8 +27,7 @@ from backend.logging_system.incident_logger import IncidentLogger
 
 def main():
     # --- Initialize Sensors ---
-    sensor_generator = SensorGenerator()
-    sensors = sensor_generator.load_or_generate()
+    sensors = generate_sensor_network()
 
     # --- Initialize Core Components ---
     confirmation = MultiSensorConfirmation()
@@ -58,14 +57,14 @@ def main():
         # Direction Classification
         direction = direction_classifier.classify(path)
 
-        # Event Processing (batch API)
+        # Event Processing
         event_manager.process(
             tracks=[track],
             paths=[path],
             directions=[direction]
         )
 
-        # Fetch active events for logging
+        # Logging
         events = event_manager.get_active_events()
         for event in events:
             incident_logger.log_event(event)
