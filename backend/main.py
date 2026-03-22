@@ -16,7 +16,7 @@ from backend.config import Config
 
 from backend.simulation.sensor_generator import generate_sensor_network
 from backend.confirmation.multi_sensor_confirmation import MultiSensorConfirmation
-from backend.alert.alert_engine import AlertEngine
+from backend.detection.alert_engine import AlertEngine
 from backend.simulation.simulation_controller import SimulationController
 from backend.tracking.intrusion_tracker import IntrusionTracker
 from backend.tracking.path_builder import PathBuilder
