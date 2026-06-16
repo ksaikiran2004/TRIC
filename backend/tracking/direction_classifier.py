@@ -1,11 +1,11 @@
 """
-TRIC - Direction Classifier (Refined + Practical Enhancements)
+TRIC - Direction Classifier
 
-Enhancements:
-    - Direction Enum (type safety)
-    - to_dict() for serialization
-    - Bearing stability guard for small displacement
-    - Optional confidence floor (configurable)
+Responsibilities:
+    - Analyze path history (vector analysis)
+    - Determine directional movement using 8-point compass
+    - Assign confidence levels based on path stability and speed
+    - Provide serialized representation for API/Logging
 """
 
 from dataclasses import dataclass
@@ -60,22 +60,24 @@ class DirectionResult:
 # =========================================================
 
 class DirectionClassifier:
+    """
+    Analyzes movement vectors to determine directional intent.
+    """
 
-    # Thresholds (from Config)
+    # Thresholds mapped from Config
     MIN_DISTANCE = Config.direction.MIN_DISTANCE
     MIN_SPEED = Config.direction.MIN_SPEED
     CONFIDENCE_DISTANCE = Config.direction.CONFIDENCE_DISTANCE
 
-    # Optional tuning flags
+    # Feature flags
     USE_BEARING_STABILITY_GUARD = Config.direction.USE_BEARING_STABILITY_GUARD
     USE_CONFIDENCE_FLOOR = Config.direction.USE_CONFIDENCE_FLOOR
     CONFIDENCE_FLOOR = Config.direction.CONFIDENCE_FLOOR
 
-    # -----------------------------------------------------
-    # PUBLIC API
-    # -----------------------------------------------------
-
     def classify(self, path: Path) -> DirectionResult:
+        """
+        Classifies the movement of a Path object.
+        """
         if not path.points or len(path.points) < 2:
             return DirectionResult(
                 path_id=path.path_id,
@@ -109,14 +111,14 @@ class DirectionClassifier:
                     end.latitude, end.longitude
                 )
 
-        # Direction
+        # Direction determination
         direction = (
             Direction.STATIONARY
             if is_stationary
             else self._bearing_to_direction(bearing)
         )
 
-        # Confidence
+        # Confidence assessment
         confidence = self._compute_confidence(
             path.total_distance_m,
             is_stationary
@@ -134,12 +136,11 @@ class DirectionClassifier:
         return [self.classify(p) for p in paths]
 
     # -----------------------------------------------------
-    # CORE METHODS
+    # INTERNAL MATH
     # -----------------------------------------------------
 
     def _compute_bearing(self, lat1, lon1, lat2, lon2) -> float:
-        lat1_rad = math.radians(lat1)
-        lat2_rad = math.radians(lat2)
+        lat1_rad, lat2_rad = math.radians(lat1), math.radians(lat2)
         delta_lon = math.radians(lon2 - lon1)
 
         x = math.sin(delta_lon) * math.cos(lat2_rad)
@@ -148,17 +149,13 @@ class DirectionClassifier:
             - math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(delta_lon)
         )
 
-        bearing_rad = math.atan2(x, y)
-        bearing_deg = math.degrees(bearing_rad)
-
-        return (bearing_deg + 360) % 360
+        return (math.degrees(math.atan2(x, y)) + 360) % 360
 
     def _bearing_to_direction(self, bearing: float) -> Direction:
         directions = [
             Direction.N, Direction.NE, Direction.E, Direction.SE,
             Direction.S, Direction.SW, Direction.W, Direction.NW
         ]
-
         index = int((bearing + 22.5) // 45) % 8
         return directions[index]
 
