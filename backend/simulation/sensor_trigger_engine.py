@@ -15,7 +15,7 @@ import time
 import uuid
 
 from backend.models.sensor_model import ConfirmedEvent
-from backend.alert.alert_engine import AlertEngine
+from backend.confirmation.alert_engine import AlertEngine
 from backend.config import Config
 
 
