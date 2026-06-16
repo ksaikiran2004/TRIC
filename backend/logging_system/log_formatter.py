@@ -1,76 +1,33 @@
 """
 TRIC - Log Formatter
-
-Responsibilities:
-    - Standardize incident data for API/UI/logging
-    - Convert ManagedEvent and metadata into consistent schema
-    - Provide batch formatting utilities
+Handles structural formatting of incident logs for UI/Audit display.
 """
 
-from typing import Dict, Any, List
-
-from backend.orchestrator.event_manager import ManagedEvent
-
+from datetime import datetime
+from typing import Dict, Any
 
 class LogFormatter:
-    """
-    Pure transformation utility for incident data.
-    """
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
-    def format_event(self, event: ManagedEvent) -> Dict[str, Any]:
-        lat, lon = event.location
-
-        return {
-            "event_id": event.event_id or "",
-            "track_id": event.track_id or "",
-            "latitude": float(lat),
-            "longitude": float(lon),
-            "direction": str(event.direction).upper(),
-            "speed": float(event.speed),
-            "confidence": float(event.confidence),
-            "timestamp": float(event.timestamp),
-            "status": self._normalize_status(event.status),
-        }
-
-    def format_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        lat, lon = self._extract_location(metadata)
+    @staticmethod
+    def format_for_ui(raw_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Converts raw incident metadata into a format optimized for the 
+        Tactical Dashboard 'Event Logs' panel.
+        """
+        # Convert timestamp to human-readable
+        ts = raw_metadata.get("timestamp", 0)
+        readable_time = datetime.fromtimestamp(ts).strftime('%H:%M:%S %d-%m-%Y')
 
         return {
-            "event_id": metadata.get("event_id", ""),
-            "track_id": metadata.get("track_id", ""),
-            "latitude": float(lat),
-            "longitude": float(lon),
-            "direction": str(metadata.get("direction", "UNKNOWN")).upper(),
-            "speed": float(metadata.get("speed", 0.0)),
-            "confidence": float(metadata.get("confidence", 0.0)),
-            "timestamp": float(metadata.get("timestamp", 0.0)),
-            "status": self._normalize_status(metadata.get("status")),
+            "id": raw_metadata.get("event_id"),
+            "time": readable_time,
+            "status": raw_metadata.get("status", "UNKNOWN").upper(),
+            "summary": f"Target detected at {raw_metadata.get('location')}",
+            "severity": "CRITICAL" if raw_metadata.get("confidence", 0) > 0.8 else "WARNING"
         }
 
-    def format_many(self, metadata_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return [self.format_metadata(m) for m in metadata_list]
-
-    # ------------------------------------------------------------------
-    # Internal Helpers
-    # ------------------------------------------------------------------
-
-    def _extract_location(self, metadata: Dict[str, Any]) -> (float, float):
-        location = metadata.get("location", [0.0, 0.0])
-
-        if isinstance(location, (list, tuple)) and len(location) == 2:
-            return float(location[0]), float(location[1])
-
-        return 0.0, 0.0
-
-    def _normalize_status(self, status: Any) -> str:
-        if status is None:
-            return "UNKNOWN"
-
-        if hasattr(status, "value"):
-            return str(status.value).upper()
-
-        return str(status).upper()
+    @staticmethod
+    def format_for_audit(raw_metadata: Dict[str, Any]) -> str:
+        """
+        Creates a raw string for archival/audit file storage.
+        """
+        return f"[{raw_metadata.get('event_id')}] - {raw_metadata.get('status')} - Conf: {raw_metadata.get('confidence')}"
