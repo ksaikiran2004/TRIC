@@ -17,7 +17,7 @@ class SimulationController:
     def __init__(
         self,
         sensors: List[Sensor],
-        frequency: float = Config.simulation.FREQUENCY,
+        frequency: float = Config.simulation.FREQUENCY_HZ,
         seed: Optional[int] = None,
         jitter: float = Config.simulation.JITTER,
         max_history: int = Config.buffer.MAX_HISTORY,
