@@ -9,7 +9,7 @@ import random
 from typing import List, Optional, Callable
 
 from backend.models.sensor_model import Sensor
-from backend.engines.sensor_trigger_engine import simulate_intrusion, SimulationResult
+from backend.simulation.sensor_trigger_engine import simulate_intrusion, SimulationResult
 from backend.config import Config
 
 
