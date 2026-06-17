@@ -98,3 +98,5 @@ class LoggingConfig:
 class BufferConfig:
     EVENT_BUFFER_SIZE = 100
     TRACK_BUFFER_SIZE = 100
+    MAX_QUEUE_SIZE = 1000
+    MAX_HISTORY = 50
