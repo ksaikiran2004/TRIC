@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TRIC Command Center</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a0a;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        #header {
+            padding: 15px 20px;
+            background-color: #111;
+            border-bottom: 2px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #comms-status {
+            font-weight: bold;
+            color: #ff3333; /* Default offline color */
+        }
+        #main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        #map {
+            flex: 3;
+            background-color: #1a1a1a;
+        }
+        #log-panel {
+            flex: 1;
+            background-color: #0d0d0d;
+            border-left: 2px solid #333;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 0.9em;
+        }
+        .log-entry {
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #222;
+        }
+        .text-alert { color: #ff4444; }
+    </style>
+</head>
+<body>
+
+    <div id="header">
+        <h2>TRIC TACTICAL ORCHESTRATOR</h2>
+        <div id="comms-status">COMMS: OFFLINE</div>
+    </div>
+
+    <div id="main-container">
+        <div id="map"></div>
+        
+        <div id="log-panel">
+            <h3>LIVE FEED</h3>
+            <div id="logs">Waiting for uplink...</div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // 1. Initialize the Map (Centered on the coordinates from your backend)
+        const map = L.map('map').setView([34.05, 74.05], 12);
+
+        // Add a dark tactical basemap
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            maxZoom: 19
+        }).addTo(map);
+
+        // 2. Connect to the Python Backend via WebSockets
+        const ws = new WebSocket("ws://localhost:8000/ws/tactical");
+        const statusEl = document.getElementById("comms-status");
+        const logsEl = document.getElementById("logs");
+
+        ws.onopen = function() {
+            statusEl.innerText = "COMMS: SECURE";
+            statusEl.style.color = "#00ff00"; // Tactical Green
+            logsEl.innerHTML = "<div class='log-entry'>[SYSTEM] Connection established. Listening for targets...</div>";
+        };
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            // Plot the target on the map
+            if (data.location && data.location.length === 2) {
+                const lat = data.location[0];
+                const lon = data.location[1];
+                
+                // Draw a glowing red circle for the target
+                L.circleMarker([lat, lon], {
+                    color: '#ff0000',
+                    fillColor: '#ff0000',
+                    fillOpacity: 0.8,
+                    radius: 6
+                }).addTo(map)
+                  .bindPopup(`Target: ${data.target_type || 'Unknown'}<br>Speed: ${data.speed || 0}m/s`);
+
+                // Add to the live text log
+                const logEntry = document.createElement("div");
+                logEntry.className = "log-entry";
+                logEntry.innerHTML = `<span class='text-alert'>[ALERT]</span> Target tracked at [${lat.toFixed(4)}, ${lon.toFixed(4)}]`;
+                
+                // Keep newest logs at the top
+                logsEl.prepend(logEntry);
+            }
+        };
+
+        ws.onclose = function() {
+            statusEl.innerText = "COMMS: OFFLINE";
+            statusEl.style.color = "#ff3333"; // Red
+            const logEntry = document.createElement("div");
+            logEntry.className = "log-entry text-alert";
+            logEntry.innerText = "[SYSTEM] Connection lost.";
+            logsEl.prepend(logEntry);
+        };
+    </script>
+</body>
+</html>
