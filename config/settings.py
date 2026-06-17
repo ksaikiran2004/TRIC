@@ -91,6 +91,7 @@ class LoggingConfig:
     # Required by IncidentLogger
     TEMP_FILE_SUFFIX = ".tmp"
     JSON_INDENT = 4
+    INCIDENTS_DIR = SystemPaths.INCIDENTS_DIR
 
 
 # ------------------------------------------------------------------
