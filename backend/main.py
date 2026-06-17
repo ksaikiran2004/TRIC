@@ -37,7 +37,7 @@ async def startup_event():
     # --- Initialize Core Components ---
     sensors = generate_sensor_network()
     confirmation = MultiSensorConfirmation()
-    alert_engine = AlertEngine(confirmation)
+    alert_engine = AlertEngine(sensors)
     tracker = IntrusionTracker()
     path_builder = PathBuilder()
     direction_classifier = DirectionClassifier()
