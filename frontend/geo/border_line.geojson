@@ -1,0 +1,20 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [74.00, 34.00],
+          [74.05, 34.05],
+          [74.10, 34.02],
+          [74.15, 34.08]
+        ]
+      },
+      "properties": {
+        "name": "Simulated LoC Segment"
+      }
+    }
+  ]
+}
