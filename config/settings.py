@@ -17,6 +17,7 @@ class SystemPaths:
     BASE_DIR = Path("data")
     INCIDENTS_DIR = BASE_DIR / "incidents"
     MODELS_DIR = BASE_DIR / "models"
+    EARTH_RADIUS_M = 6371000.0
 
 
 # ------------------------------------------------------------------
