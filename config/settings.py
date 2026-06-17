@@ -29,7 +29,7 @@ class SimulationConfig:
     LATENCY_SEC = 0.0           # simulated delay
     MAX_ENTITIES = 10           # number of simulated intrusions
     UPDATE_INTERVAL = 1.0       # (Added for legacy sim compatibility)
-
+    INTENSITY_PROFILE = "standard"
 
 # ------------------------------------------------------------------
 # Tracking Settings
