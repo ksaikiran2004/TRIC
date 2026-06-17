@@ -30,6 +30,7 @@ class SimulationConfig:
     MAX_ENTITIES = 10           # number of simulated intrusions
     UPDATE_INTERVAL = 1.0       # (Added for legacy sim compatibility)
     INTENSITY_PROFILE = "standard"
+    BORDER_BUFFER = 50.0
 
 # ------------------------------------------------------------------
 # Tracking Settings
