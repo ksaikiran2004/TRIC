@@ -95,14 +95,14 @@ def generate_intensity(simulation_type: SimulationType) -> float:
 # =========================================================
 
 def simulate_intrusion(
-    alert_engine: AlertEngine,
-    intrusion_lat: float,
-    intrusion_lon: float,
-    simulation_type: SimulationType,
+    alert_engine: "AlertEngine" = None,
+    intrusion_lat: float = 0.0,
+    intrusion_lon: float = 0.0,
+    simulation_type: "SimulationType" = None,
     debug: bool = False,
     simulate_latency: bool = False,
     use_gaussian_latency: bool = False,
-    **kwargs  
+    **kwargs
 ) -> SimulationResult:
     """
     Simulate a single intrusion event.
