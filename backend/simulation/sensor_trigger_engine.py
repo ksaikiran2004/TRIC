@@ -102,6 +102,7 @@ def simulate_intrusion(
     debug: bool = False,
     simulate_latency: bool = False,
     use_gaussian_latency: bool = False,
+    **kwargs  
 ) -> SimulationResult:
     """
     Simulate a single intrusion event.
