@@ -32,6 +32,7 @@ class SimulationConfig:
     UPDATE_INTERVAL = 1.0       # (Added for legacy sim compatibility)
     INTENSITY_PROFILE = "standard"
     BORDER_BUFFER = 50.0
+    MIN_INTERVAL = 0.5
 
 # ------------------------------------------------------------------
 # Tracking Settings

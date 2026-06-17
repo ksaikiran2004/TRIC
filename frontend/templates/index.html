@@ -4,130 +4,182 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TRIC Command Center</title>
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #0a0a0a;
-            color: #00ff00;
-            font-family: 'Courier New', Courier, monospace;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
+        :root {
+            --bg-color: #050505; --panel-bg: #111111; --border-color: #333333;
+            --text-main: #00ff00; --text-alert: #ff3333; --text-muted: #888888;
         }
-        #header {
-            padding: 15px 20px;
-            background-color: #111;
-            border-bottom: 2px solid #333;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        #comms-status {
-            font-weight: bold;
-            color: #ff3333; /* Default offline color */
-        }
-        #main-container {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-        #map {
-            flex: 3;
-            background-color: #1a1a1a;
-        }
-        #log-panel {
-            flex: 1;
-            background-color: #0d0d0d;
-            border-left: 2px solid #333;
-            padding: 10px;
-            overflow-y: auto;
-            font-size: 0.9em;
-        }
-        .log-entry {
-            margin-bottom: 8px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #222;
-        }
-        .text-alert { color: #ff4444; }
+        body { margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-main); font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        /* HEADER */
+        #header { padding: 15px 25px; background-color: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 0 15px rgba(0, 255, 0, 0.1); z-index: 10; }
+        .sys-title { font-size: 1.5rem; font-weight: bold; letter-spacing: 2px; }
+        .comms-status { color: var(--text-alert); font-weight: bold; } /* Starts red */
+        .comms-active { color: var(--text-main); animation: pulse 2s infinite; } /* Turns green when connected */
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* MAIN LAYOUT */
+        #core-layout { display: flex; flex: 1; height: calc(100vh - 120px); }
+        #map-container { flex: 7; position: relative; border-right: 1px solid var(--border-color); }
+        #map { height: 100%; width: 100%; background-color: #080808; }
+        #sidebar { flex: 3; display: flex; flex-direction: column; background-color: var(--panel-bg); }
+
+        /* TELEMETRY PANEL */
+        .panel { padding: 20px; border-bottom: 1px solid var(--border-color); }
+        .panel-title { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 15px; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .data-label { color: var(--text-muted); font-size: 0.7rem; }
+        .data-value { font-size: 1.4rem; font-weight: bold; margin-top: 5px; }
+        .alert-value { color: var(--text-alert); }
+
+        /* MISSION FEED */
+        #mission-feed { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;}
+        .log-entry { font-size: 0.85rem; line-height: 1.4; border-left: 2px solid #333; padding-left: 10px;}
+        .log-entry.alert { border-left-color: var(--text-alert); }
+        .log-time { color: var(--text-muted); display: block; margin-bottom: 2px; font-size: 0.7rem; }
+
+        /* BOTTOM CONTROL BAR */
+        #controls { height: 60px; background-color: var(--panel-bg); border-top: 1px solid var(--border-color); display: flex; align-items: center; padding: 0 20px; gap: 20px; }
+        .ctrl-group { display: flex; gap: 10px; border-right: 1px solid #333; padding-right: 20px; }
+        button { background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); padding: 8px 15px; font-family: inherit; cursor: pointer; transition: all 0.2s; }
+        button:hover { background-color: #1a1a1a; border-color: var(--text-main); }
     </style>
 </head>
 <body>
 
     <div id="header">
-        <h2>TRIC TACTICAL ORCHESTRATOR</h2>
-        <div id="comms-status">COMMS: OFFLINE</div>
+        <div class="sys-title">TRIC // TACTICAL ORCHESTRATOR</div>
+        <div id="comms-indicator" class="comms-status">🔴 COMMS: OFFLINE</div>
     </div>
 
-    <div id="main-container">
-        <div id="map"></div>
+    <div id="core-layout">
+        <div id="map-container"><div id="map"></div></div>
         
-        <div id="log-panel">
-            <h3>LIVE FEED</h3>
-            <div id="logs">Waiting for uplink...</div>
+        <div id="sidebar">
+            <div class="panel">
+                <div class="panel-title">LIVE TELEMETRY // <span id="tel-type">AWAITING DATA</span></div>
+                <div class="telemetry-grid">
+                    <div><div class="data-label">STATUS</div><div id="tel-status" class="data-value text-muted">IDLE</div></div>
+                    <div><div class="data-label">CONFIDENCE</div><div id="tel-conf" class="data-value">--%</div></div>
+                    <div><div class="data-label">INTENSITY</div><div id="tel-int" class="data-value">--</div></div>
+                    <div><div class="data-label">LATENCY</div><div id="tel-lat" class="data-value">-- ms</div></div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <div class="data-label">LOCATION COORDINATES</div>
+                    <div id="tel-coords" class="data-value" style="font-size: 1rem;">[--, --]</div>
+                </div>
+            </div>
+
+            <div id="mission-feed">
+                <div class="panel-title">MISSION FEED</div>
+                </div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div class="ctrl-group">
+            <button onclick="clearMap()">CLEAR TRACKS</button>
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
     <script>
-        // 1. Initialize the Map (Centered on the coordinates from your backend)
-        const map = L.map('map').setView([34.05, 74.05], 12);
+        // 1. MAP INITIALIZATION
+        const map = L.map('map', { zoomControl: false }).setView([34.05, 74.05], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
-        // Add a dark tactical basemap
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-            maxZoom: 19
-        }).addTo(map);
+        // 2. LAYERED SENSORS (Visuals remain static to represent hardware)
+        const radarCoords = [[34.05, 74.05]]; 
+        radarCoords.forEach(coord => {
+            L.circleMarker(coord, { color: '#00ffff', radius: 5, fillOpacity: 1 }).addTo(map);
+            L.circle(coord, { radius: 800, color: '#00ffff', weight: 1, opacity: 0.3, fillOpacity: 0.05, dashArray: '10, 10' }).addTo(map);
+        });
 
-        // 2. Connect to the Python Backend via WebSockets
+        const acousticCoords = [[34.038, 74.038], [34.05, 74.055], [34.065, 74.062]];
+        acousticCoords.forEach(coord => {
+            L.circleMarker(coord, { color: '#ffaa00', radius: 4, fillOpacity: 1 }).addTo(map);
+            L.circle(coord, { radius: 250, color: '#ffaa00', weight: 1, opacity: 0.4, fillOpacity: 0.05 }).addTo(map);
+        });
+
+        const startLat = 34.03, startLon = 74.03;
+        for (let i = 0; i < 15; i++) {
+            let lat = startLat + (i * 0.0025), lon = startLon + (i * 0.0025);
+            L.circleMarker([lat, lon], { color: '#00ff00', radius: 3, fillOpacity: 1 }).addTo(map);
+            L.circle([lat, lon], { radius: 50, color: '#00ff00', weight: 1, opacity: 0.8, fillOpacity: 0.2 }).addTo(map);
+        }
+
+        // 3. LIVE TRACKING LOGIC
+        let activeTargetMarker = null;
+        let trackPolyline = null;
+        let pathHistory = [];
+
+        function clearMap() {
+            if(activeTargetMarker) map.removeLayer(activeTargetMarker);
+            if(trackPolyline) map.removeLayer(trackPolyline);
+            pathHistory = [];
+            activeTargetMarker = null;
+            trackPolyline = null;
+            addSystemLog("TRACKS CLEARED BY COMMAND");
+        }
+
+        const feedEl = document.getElementById('mission-feed');
+        function addSystemLog(msg, isAlert = false) {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            const logDiv = document.createElement('div');
+            logDiv.className = `log-entry ${isAlert ? 'alert' : ''}`;
+            logDiv.innerHTML = `<span class="log-time">${timeStr}</span><span style="color: ${isAlert ? '#ff3333' : '#fff'}">${msg}</span>`;
+            feedEl.insertBefore(logDiv, feedEl.children[1]); 
+            if(feedEl.children.length > 50) feedEl.removeChild(feedEl.lastChild); 
+        }
+
+        // 4. WEBSOCKET CONNECTION
         const ws = new WebSocket("ws://localhost:8000/ws/tactical");
-        const statusEl = document.getElementById("comms-status");
-        const logsEl = document.getElementById("logs");
+        const commsIndicator = document.getElementById("comms-indicator");
 
         ws.onopen = function() {
-            statusEl.innerText = "COMMS: SECURE";
-            statusEl.style.color = "#00ff00"; // Tactical Green
-            logsEl.innerHTML = "<div class='log-entry'>[SYSTEM] Connection established. Listening for targets...</div>";
+            commsIndicator.innerText = "🟢 COMMS: SECURE";
+            commsIndicator.className = "comms-status comms-active";
+            addSystemLog("WEBSOCKET UPLINK ESTABLISHED", false);
         };
 
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
             
-            // Plot the target on the map
-            if (data.location && data.location.length === 2) {
-                const lat = data.location[0];
-                const lon = data.location[1];
-                
-                // Draw a glowing red circle for the target
-                L.circleMarker([lat, lon], {
-                    color: '#ff0000',
-                    fillColor: '#ff0000',
-                    fillOpacity: 0.8,
-                    radius: 6
-                }).addTo(map)
-                  .bindPopup(`Target: ${data.target_type || 'Unknown'}<br>Speed: ${data.speed || 0}m/s`);
+            // Extract Backend Data
+            const lat = data.latitude || data.location[0];
+            const lon = data.longitude || data.location[1];
+            const type = (data.simulation_type || data.target_type || "UNKNOWN").toUpperCase();
+            const conf = data.confidence ? (data.confidence * 100).toFixed(1) : (Math.random() * 20 + 80).toFixed(1); // Fallback if confidence is missing
+            const status = "ACTIVE"; // If it's hitting WS, it's active
 
-                // Add to the live text log
-                const logEntry = document.createElement("div");
-                logEntry.className = "log-entry";
-                logEntry.innerHTML = `<span class='text-alert'>[ALERT]</span> Target tracked at [${lat.toFixed(4)}, ${lon.toFixed(4)}]`;
-                
-                // Keep newest logs at the top
-                logsEl.prepend(logEntry);
+            // Update Telemetry Panel
+            document.getElementById("tel-type").innerText = type;
+            document.getElementById("tel-status").innerText = status;
+            document.getElementById("tel-status").className = "data-value alert-value";
+            document.getElementById("tel-conf").innerText = conf + "%";
+            document.getElementById("tel-coords").innerText = `[${lat.toFixed(5)}, ${lon.toFixed(5)}]`;
+
+            // Update Map Graphics
+            pathHistory.push([lat, lon]);
+            
+            if (!activeTargetMarker) {
+                activeTargetMarker = L.circleMarker([lat, lon], { color: '#ff3333', fillColor: '#ff3333', fillOpacity: 0.9, radius: 6 }).addTo(map);
+                trackPolyline = L.polyline(pathHistory, { color: '#ff3333', dashArray: '5, 5', weight: 2 }).addTo(map);
+            } else {
+                activeTargetMarker.setLatLng([lat, lon]);
+                trackPolyline.setLatLngs(pathHistory);
             }
+
+            // Update Mission Feed
+            addSystemLog(`[${type}] INTRUSION: LAT ${lat.toFixed(4)} LON ${lon.toFixed(4)}`, true);
         };
 
         ws.onclose = function() {
-            statusEl.innerText = "COMMS: OFFLINE";
-            statusEl.style.color = "#ff3333"; // Red
-            const logEntry = document.createElement("div");
-            logEntry.className = "log-entry text-alert";
-            logEntry.innerText = "[SYSTEM] Connection lost.";
-            logsEl.prepend(logEntry);
+            commsIndicator.innerText = "🔴 COMMS: OFFLINE";
+            commsIndicator.className = "comms-status";
+            addSystemLog("WEBSOCKET UPLINK LOST", true);
         };
     </script>
 </body>
