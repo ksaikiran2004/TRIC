@@ -16,3 +16,8 @@ data/incidents/*
 # OS files
 .DS_Store
 Thumbs.db
+
+*.db
+__pycache__/
+.env
+venv/
