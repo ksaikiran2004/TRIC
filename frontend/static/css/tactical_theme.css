@@ -1,130 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
 :root {
-    /* Muted Military Palette based on prototype reference */
     --bg-color: #0b0f0c; 
-    --panel-bg: #151b17; /* Dark olive/grey */
-    --border-color: #384d3c; /* Muted green border */
+    --panel-bg: rgba(21, 27, 23, 0.85);
+    --border-color: #384d3c; 
     --border-highlight: #5b7a61;
-    
-    /* Neon accents (kept as requested) */
-    --text-neon-green: #00ff55; 
+    --text-neon-green: #00ea4f; 
     --text-neon-red: #ff3333; 
-    
-    /* Standard text */
     --text-muted: #73997b;
     --text-bright: #e0ebe2;
-    
-    --glow-subtle: 0 0 8px rgba(0, 255, 85, 0.2);
 }
 
 body { 
-    margin: 0; padding: 0; 
-    background-color: var(--bg-color); 
-    /* Subtle CSS-generated topographic map lines */
+    margin: 0; padding: 0; background-color: var(--bg-color); 
     background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 60 Q 30 30 60 60 T 120 60' fill='none' stroke='%23121a14' stroke-width='1.5'/%3E%3Cpath d='M0 90 Q 30 60 60 90 T 120 90' fill='none' stroke='%23121a14' stroke-width='1.5'/%3E%3Cpath d='M0 30 Q 30 0 60 30 T 120 30' fill='none' stroke='%23121a14' stroke-width='1.5'/%3E%3C/svg%3E");
-    background-size: 150px 150px;
-    color: var(--text-bright); 
-    font-family: 'Courier New', Courier, monospace; 
-    display: flex; flex-direction: column; 
-    height: 100vh; overflow: hidden; 
+    background-size: 150px 150px; color: var(--text-bright); 
+    font-family: 'Share Tech Mono', Consolas, Monaco, 'Courier New', monospace; 
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden; 
 }
 
-/* UI COMPONENTS - Sharp, structural, non-blurry */
-.glass-panel {
-    background-color: var(--panel-bg);
-    border: 1px solid var(--border-color);
-    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5); /* Inner depth, not outer glow */
-}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-color); }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-highlight); }
 
 #header { 
-    padding: 12px 25px; 
-    background-color: var(--panel-bg); 
-    border-bottom: 2px solid var(--border-highlight); 
-    display: flex; justify-content: space-between; align-items: center; 
-    z-index: 10; 
+    padding: 12px 25px; background-color: #050706; border-bottom: 2px solid var(--border-highlight); 
+    display: flex; justify-content: space-between; align-items: center; z-index: 10; 
 }
 
-.sys-title { 
-    font-size: 1.4rem; 
-    font-weight: bold; 
-    letter-spacing: 2px; 
-    color: var(--text-bright);
-}
-.comms-status { color: var(--text-neon-red); font-weight: bold; letter-spacing: 1px; }
-.comms-active { color: var(--text-neon-green); animation: pulse 2s infinite; text-shadow: var(--glow-subtle); }
+.sys-title { font-size: 1.5rem; font-weight: bold; letter-spacing: 3px; color: var(--text-bright); }
 
-@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+.comms-status { display: flex; align-items: center; font-weight: bold; letter-spacing: 2px; border: 1px solid var(--border-color); padding: 4px 10px; }
+.status-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; box-shadow: 0 0 8px currentColor; }
+.offline-text { color: var(--text-neon-red); border-color: var(--text-neon-red); }
+.offline-dot { background-color: var(--text-neon-red); color: var(--text-neon-red); }
+.online-text { color: var(--text-neon-green); border-color: var(--text-neon-green); animation: pulse 2s infinite; }
+.online-dot { background-color: var(--text-neon-green); color: var(--text-neon-green); }
 
-#core-layout { display: flex; flex: 1; height: calc(100vh - 120px); padding: 15px; gap: 15px; }
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-/* MAP AREA */
-#map-container { 
-    flex: 7; 
-    position: relative; 
-    border: 1px solid var(--border-highlight); 
-    background-color: #000;
-}
-#map { height: 100%; width: 100%; filter: grayscale(80%) contrast(1.2) brightness(0.7); } /* Makes the map match the dark olive theme */
+#core-layout { display: flex; flex: 1; height: calc(100vh - 65px); padding: 15px; gap: 15px; }
+
+#map-container { flex: 6.5; position: relative; border: 1px solid var(--border-highlight); background-color: #000; }
+#map { height: 100%; width: 100%; filter: grayscale(60%) contrast(1.2) brightness(0.8); background-color: #000; }
 
 .map-overlay-scanline {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background: repeating-linear-gradient(
-        0deg,
-        rgba(0, 0, 0, 0.15),
-        rgba(0, 0, 0, 0.15) 1px,
-        transparent 1px,
-        transparent 3px
-    );
-    pointer-events: none; 
-    z-index: 400;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.1), rgba(0,0,0,0.1) 1px, transparent 1px, transparent 3px);
+    pointer-events: none; z-index: 400;
 }
 
-/* SIDEBAR PANELS */
-#sidebar { flex: 3; display: flex; flex-direction: column; gap: 15px;}
-
-.panel { padding: 15px; position: relative; }
-/* Adding those cool corner brackets from the reference image */
-.panel::before {
-    content: ''; position: absolute; top: -1px; left: -1px; width: 10px; height: 10px;
-    border-top: 2px solid var(--border-highlight); border-left: 2px solid var(--border-highlight);
-}
-.panel::after {
-    content: ''; position: absolute; bottom: -1px; right: -1px; width: 10px; height: 10px;
-    border-bottom: 2px solid var(--border-highlight); border-right: 2px solid var(--border-highlight);
-}
-
-.panel-title { 
-    color: var(--text-bright); 
-    font-size: 0.9rem; 
-    font-weight: bold;
-    margin-bottom: 15px; 
-    border-bottom: 1px solid var(--border-color); 
-    padding-bottom: 8px; 
-    letter-spacing: 1px; 
-}
+#sidebar { flex: 3.5; display: flex; flex-direction: column; gap: 15px;}
+.panel { padding: 15px; position: relative; background-color: var(--panel-bg); border: 1px solid var(--border-color); }
+.panel::before { content: ''; position: absolute; top: -1px; left: -1px; width: 12px; height: 12px; border-top: 2px solid var(--text-neon-green); border-left: 2px solid var(--text-neon-green); }
+.panel::after { content: ''; position: absolute; bottom: -1px; right: -1px; width: 12px; height: 12px; border-bottom: 2px solid var(--text-neon-green); border-right: 2px solid var(--text-neon-green); }
+.panel-title { color: var(--text-bright); font-size: 1rem; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; letter-spacing: 2px; }
 
 .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-.data-label { color: var(--text-muted); font-size: 0.75rem; letter-spacing: 1px;}
-.data-value { color: var(--text-neon-green); font-size: 1.4rem; font-weight: bold; margin-top: 3px; text-shadow: var(--glow-subtle); }
-.coord-font { font-size: 1.1rem; letter-spacing: 1px; }
-.alert-value { color: var(--text-neon-red); text-shadow: 0 0 10px rgba(255, 42, 42, 0.4); }
+.data-label { color: var(--text-muted); font-size: 0.8rem; letter-spacing: 1px;}
+.data-value { color: var(--text-neon-green); font-size: 1.5rem; font-weight: bold; margin-top: 3px; }
+.alert-value { color: var(--text-neon-red); }
 
-#mission-feed { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;}
-.log-entry { 
-    font-size: 0.85rem; line-height: 1.4; 
-    border: 1px solid var(--border-color); 
-    padding: 8px; 
-    background: rgba(0, 0, 0, 0.3); 
-    display: flex; gap: 10px;
-}
-.log-entry.alert { border-color: var(--text-neon-red); color: var(--text-neon-red); background: rgba(255,0,0,0.05); }
-.log-time { color: var(--text-muted); font-size: 0.75rem; border-right: 1px solid var(--border-color); padding-right: 10px;}
+#mission-feed { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; background-color: var(--panel-bg); border: 1px solid var(--border-color); }
+.log-entry { font-size: 0.9rem; line-height: 1.4; border-left: 3px solid var(--border-highlight); padding: 6px 10px; background: rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 2px; }
+.log-entry.alert { border-left-color: var(--text-neon-red); color: var(--text-neon-red); background: rgba(255,51,51,0.08); }
+.log-time { color: var(--text-muted); font-size: 0.8rem; }
 
-#controls { height: 60px; display: flex; align-items: center; padding: 0 20px; gap: 20px; border-top: 1px solid var(--border-highlight); margin: 0 15px 15px 15px; background-color: var(--panel-bg);}
-.btn-primary { 
-    background-color: transparent; 
-    color: var(--text-muted); 
-    border: 1px solid var(--border-color); 
-    padding: 8px 16px; 
-    font-family: inherit; font-weight: bold; cursor: pointer; transition: all 0.2s; letter-spacing: 1px; 
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel-bg) !important; border: 1px solid var(--border-highlight); color: var(--text-bright) !important; border-radius: 0 !important; box-shadow: none !important; font-family: inherit; }
+.leaflet-container a.leaflet-popup-close-button { color: var(--text-muted) !important; }
+
+#controls { display: flex; align-items: center; justify-content: flex-end; gap: 20px;}
+.btn-primary { background-color: rgba(0,0,0,0.5); color: var(--text-bright); border: 1px solid var(--border-highlight); padding: 10px 20px; font-family: inherit; font-size: 1rem; cursor: pointer; transition: all 0.2s; letter-spacing: 2px; }
+.btn-primary:hover { color: var(--bg-color); border-color: var(--text-neon-green); background-color: var(--text-neon-green); }
+
+/* =========================================
+   NEW DRONE VIDEO LAYOUT CODE INJECTED HERE
+   ========================================= */
+
+#left-column { flex: 6.5; display: flex; flex-direction: column; gap: 15px; }
+
+#video-container { 
+    flex: 3.5; /* Takes up bottom 35% of the left column */
+    background: #000; 
+    padding: 0; 
+    overflow: hidden; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    border: 1px solid var(--border-highlight);
+    position: relative;
 }
-.btn-primary:hover { color: var(--text-neon-green); border-color: var(--text-neon-green); background-color: rgba(0, 255, 85, 0.05); }
+
+#drone-feed { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; 
+    filter: grayscale(100%) contrast(1.5); /* Forces IR tactical look */
+}
+
+.video-overlay-text { 
+    position: absolute; 
+    top: 10px; left: 15px; 
+    color: var(--text-neon-red); 
+    font-size: 0.8rem; 
+    font-weight: bold; 
+    text-shadow: 0 0 5px rgba(255,0,0,0.5); 
+    animation: blink 2s infinite; 
+    z-index: 10;
+}
+/* Purge Leaflet Watermark */
+.leaflet-control-attribution { display: none !important; }

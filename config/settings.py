@@ -12,52 +12,58 @@ from pathlib import Path
 # ------------------------------------------------------------------
 # System Paths
 # ------------------------------------------------------------------
-
 class SystemPaths:
     BASE_DIR = Path("data")
     INCIDENTS_DIR = BASE_DIR / "incidents"
     MODELS_DIR = BASE_DIR / "models"
     EARTH_RADIUS_M = 6371000.0
 
-
 # ------------------------------------------------------------------
 # Simulation Settings
 # ------------------------------------------------------------------
-
 class SimulationConfig:
     FREQUENCY_HZ = 2.0          # updates per second
     JITTER = 0.2                # randomness in movement
     LATENCY_SEC = 0.0           # simulated delay
     MAX_ENTITIES = 10           # number of simulated intrusions
     UPDATE_INTERVAL = 1.0       # (Added for legacy sim compatibility)
-    INTENSITY_PROFILE = "standard"
+    
+    # [FIXED] Converted to dictionary to map simulation_type to intensity ranges
+    INTENSITY_PROFILE = {
+        "human": (0.6, 0.9),
+        "vehicle": (0.8, 1.0),
+        "animal": (0.1, 0.4)
+    }
+    
+    # [NEW] Added missing Noise & Latency parameters expected by the engine
+    NOISE_FLOOR = 0.05
+    NOISE_SCALE_FACTOR = 0.1
+    MIN_LATENCY = 0.05
+    GAUSSIAN_LATENCY_MEAN = 0.1
+    GAUSSIAN_LATENCY_STD = 0.02
+    UNIFORM_LATENCY_MIN = 0.01
+    UNIFORM_LATENCY_MAX = 0.2
+
     BORDER_BUFFER = 50.0
     MIN_INTERVAL = 0.5
 
 # ------------------------------------------------------------------
 # Tracking Settings
 # ------------------------------------------------------------------
-
 class TrackingConfig:
     MAX_TRACK_AGE_SEC = 10.0        # remove inactive tracks
     MIN_POINTS_FOR_PATH = 2         # minimum events to form path
     MAX_HISTORY_POINTS = 50         # memory control
-    
-    # Required by IntrusionTracker
     DISTANCE_THRESHOLD = 50.0       # Max distance in meters between consecutive events
     TIME_THRESHOLD = 15.0           # Max time in seconds before a track goes inactive
-
 
 # ------------------------------------------------------------------
 # Direction Settings
 # ------------------------------------------------------------------
-
 class DirectionConfig:
     MIN_MOVEMENT_DISTANCE = 0.5     # meters threshold
     STATIONARY_THRESHOLD = 0.2      # below → stationary
     SMOOTHING_WINDOW = 3            # points used for smoothing
-    
-    # Required by DirectionClassifier
     MIN_DISTANCE = 5.0              
     MIN_SPEED = 0.5                
     CONFIDENCE_DISTANCE = 20.0     
@@ -65,40 +71,30 @@ class DirectionConfig:
     USE_CONFIDENCE_FLOOR = True
     CONFIDENCE_FLOOR = 0.2
 
-
 # ------------------------------------------------------------------
 # Event Settings
 # ------------------------------------------------------------------
-
 class EventConfig:
     CONFIDENCE_THRESHOLD = 0.5      # minimum valid event
     INACTIVE_TIMEOUT_SEC = 5.0      # mark event inactive
     MAX_EVENT_AGE_SEC = 30.0        # cleanup threshold
-    
-    # Required by EventManager
     MAX_CONFIDENCE = 1.0
     SPEED_NORMALIZER = 5.0          
-
 
 # ------------------------------------------------------------------
 # Logging Settings
 # ------------------------------------------------------------------
-
 class LoggingConfig:
     ENABLE_FILE_LOGGING = True
     METADATA_VERSION = 1
     WRITE_INDENT = 4                # JSON formatting
-    
-    # Required by IncidentLogger
     TEMP_FILE_SUFFIX = ".tmp"
     JSON_INDENT = 4
     INCIDENTS_DIR = SystemPaths.INCIDENTS_DIR
 
-
 # ------------------------------------------------------------------
 # Performance / Buffer Settings
 # ------------------------------------------------------------------
-
 class BufferConfig:
     EVENT_BUFFER_SIZE = 100
     TRACK_BUFFER_SIZE = 100

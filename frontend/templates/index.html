@@ -1,186 +1,127 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TRIC Command Center</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        :root {
-            --bg-color: #050505; --panel-bg: #111111; --border-color: #333333;
-            --text-main: #00ff00; --text-alert: #ff3333; --text-muted: #888888;
-        }
-        body { margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-main); font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
-        /* HEADER */
-        #header { padding: 15px 25px; background-color: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 0 15px rgba(0, 255, 0, 0.1); z-index: 10; }
-        .sys-title { font-size: 1.5rem; font-weight: bold; letter-spacing: 2px; }
-        .comms-status { color: var(--text-alert); font-weight: bold; } /* Starts red */
-        .comms-active { color: var(--text-main); animation: pulse 2s infinite; } /* Turns green when connected */
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
-        /* MAIN LAYOUT */
-        #core-layout { display: flex; flex: 1; height: calc(100vh - 120px); }
-        #map-container { flex: 7; position: relative; border-right: 1px solid var(--border-color); }
-        #map { height: 100%; width: 100%; background-color: #080808; }
-        #sidebar { flex: 3; display: flex; flex-direction: column; background-color: var(--panel-bg); }
+:root {
+    /* Muted Military Palette */
+    --bg-color: #0b0f0c; 
+    --panel-bg: rgba(21, 27, 23, 0.85); /* Slightly transparent for depth */
+    --border-color: #384d3c; 
+    --border-highlight: #5b7a61;
+    
+    /* Strict Hardware Indicators (No Hollywood Glow) */
+    --text-neon-green: #00ea4f; 
+    --text-neon-red: #ff3333; 
+    
+    /* Standard text */
+    --text-muted: #73997b;
+    --text-bright: #e0ebe2;
+}
 
-        /* TELEMETRY PANEL */
-        .panel { padding: 20px; border-bottom: 1px solid var(--border-color); }
-        .panel-title { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 15px; border-bottom: 1px solid #222; padding-bottom: 5px; }
-        .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .data-label { color: var(--text-muted); font-size: 0.7rem; }
-        .data-value { font-size: 1.4rem; font-weight: bold; margin-top: 5px; }
-        .alert-value { color: var(--text-alert); }
+body { 
+    margin: 0; padding: 0; 
+    background-color: var(--bg-color); 
+    /* Your Topographic map lines */
+    background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 60 Q 30 30 60 60 T 120 60' fill='none' stroke='%23121a14' stroke-width='1.5'/%3E%3Cpath d='M0 90 Q 30 60 60 90 T 120 90' fill='none' stroke='%23121a14' stroke-width='1.5'/%3E%3Cpath d='M0 30 Q 30 0 60 30 T 120 30' fill='none' stroke='%23121a14' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-size: 150px 150px;
+    color: var(--text-bright); 
+    font-family: 'Share Tech Mono', 'Courier New', monospace; /* REAL TACTICAL FONT */
+    display: flex; flex-direction: column; 
+    height: 100vh; overflow: hidden; 
+}
 
-        /* MISSION FEED */
-        #mission-feed { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;}
-        .log-entry { font-size: 0.85rem; line-height: 1.4; border-left: 2px solid #333; padding-left: 10px;}
-        .log-entry.alert { border-left-color: var(--text-alert); }
-        .log-time { color: var(--text-muted); display: block; margin-bottom: 2px; font-size: 0.7rem; }
+/* CUSTOM SCROLLBARS (Crucial for immersion) */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-color); }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-highlight); }
 
-        /* BOTTOM CONTROL BAR */
-        #controls { height: 60px; background-color: var(--panel-bg); border-top: 1px solid var(--border-color); display: flex; align-items: center; padding: 0 20px; gap: 20px; }
-        .ctrl-group { display: flex; gap: 10px; border-right: 1px solid #333; padding-right: 20px; }
-        button { background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); padding: 8px 15px; font-family: inherit; cursor: pointer; transition: all 0.2s; }
-        button:hover { background-color: #1a1a1a; border-color: var(--text-main); }
-    </style>
-</head>
-<body>
+/* UI COMPONENTS */
+.glass-panel {
+    background-color: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(4px); /* Hardware glass effect */
+}
 
-    <div id="header">
-        <div class="sys-title">TRIC // TACTICAL ORCHESTRATOR</div>
-        <div id="comms-indicator" class="comms-status">🔴 COMMS: OFFLINE</div>
-    </div>
+#header { 
+    padding: 12px 25px; 
+    background-color: #050706; 
+    border-bottom: 2px solid var(--border-highlight); 
+    display: flex; justify-content: space-between; align-items: center; 
+    z-index: 10; 
+}
 
-    <div id="core-layout">
-        <div id="map-container"><div id="map"></div></div>
-        
-        <div id="sidebar">
-            <div class="panel">
-                <div class="panel-title">LIVE TELEMETRY // <span id="tel-type">AWAITING DATA</span></div>
-                <div class="telemetry-grid">
-                    <div><div class="data-label">STATUS</div><div id="tel-status" class="data-value text-muted">IDLE</div></div>
-                    <div><div class="data-label">CONFIDENCE</div><div id="tel-conf" class="data-value">--%</div></div>
-                    <div><div class="data-label">INTENSITY</div><div id="tel-int" class="data-value">--</div></div>
-                    <div><div class="data-label">LATENCY</div><div id="tel-lat" class="data-value">-- ms</div></div>
-                </div>
-                <div style="margin-top: 15px;">
-                    <div class="data-label">LOCATION COORDINATES</div>
-                    <div id="tel-coords" class="data-value" style="font-size: 1rem;">[--, --]</div>
-                </div>
-            </div>
+.sys-title { font-size: 1.5rem; font-weight: bold; letter-spacing: 3px; color: var(--text-bright); }
+.comms-status { color: var(--text-neon-red); font-weight: bold; letter-spacing: 2px; border: 1px solid var(--text-neon-red); padding: 4px 10px; }
+.comms-active { color: var(--text-neon-green); border-color: var(--text-neon-green); animation: pulse 2s infinite; }
 
-            <div id="mission-feed">
-                <div class="panel-title">MISSION FEED</div>
-                </div>
-        </div>
-    </div>
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-    <div id="controls">
-        <div class="ctrl-group">
-            <button onclick="clearMap()">CLEAR TRACKS</button>
-        </div>
-    </div>
+#core-layout { display: flex; flex: 1; height: calc(100vh - 65px); padding: 15px; gap: 15px; }
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        // 1. MAP INITIALIZATION
-        const map = L.map('map', { zoomControl: false }).setView([34.05, 74.05], 13);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+/* MAP AREA */
+#map-container { 
+    flex: 7; 
+    position: relative; 
+    border: 1px solid var(--border-highlight); 
+    background-color: #000;
+}
 
-        // 2. LAYERED SENSORS (Visuals remain static to represent hardware)
-        const radarCoords = [[34.05, 74.05]]; 
-        radarCoords.forEach(coord => {
-            L.circleMarker(coord, { color: '#00ffff', radius: 5, fillOpacity: 1 }).addTo(map);
-            L.circle(coord, { radius: 800, color: '#00ffff', weight: 1, opacity: 0.3, fillOpacity: 0.05, dashArray: '10, 10' }).addTo(map);
-        });
+/* Your excellent map filter */
+#map { height: 100%; width: 100%; filter: grayscale(85%) contrast(1.3) brightness(0.6); }
 
-        const acousticCoords = [[34.038, 74.038], [34.05, 74.055], [34.065, 74.062]];
-        acousticCoords.forEach(coord => {
-            L.circleMarker(coord, { color: '#ffaa00', radius: 4, fillOpacity: 1 }).addTo(map);
-            L.circle(coord, { radius: 250, color: '#ffaa00', weight: 1, opacity: 0.4, fillOpacity: 0.05 }).addTo(map);
-        });
+.map-overlay-scanline {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.1), rgba(0,0,0,0.1) 1px, transparent 1px, transparent 3px);
+    pointer-events: none; z-index: 400;
+}
 
-        const startLat = 34.03, startLon = 74.03;
-        for (let i = 0; i < 15; i++) {
-            let lat = startLat + (i * 0.0025), lon = startLon + (i * 0.0025);
-            L.circleMarker([lat, lon], { color: '#00ff00', radius: 3, fillOpacity: 1 }).addTo(map);
-            L.circle([lat, lon], { radius: 50, color: '#00ff00', weight: 1, opacity: 0.8, fillOpacity: 0.2 }).addTo(map);
-        }
+/* SIDEBAR PANELS */
+#sidebar { flex: 3; display: flex; flex-direction: column; gap: 15px;}
 
-        // 3. LIVE TRACKING LOGIC
-        let activeTargetMarker = null;
-        let trackPolyline = null;
-        let pathHistory = [];
+.panel { padding: 15px; position: relative; background-color: var(--panel-bg); border: 1px solid var(--border-color); }
 
-        function clearMap() {
-            if(activeTargetMarker) map.removeLayer(activeTargetMarker);
-            if(trackPolyline) map.removeLayer(trackPolyline);
-            pathHistory = [];
-            activeTargetMarker = null;
-            trackPolyline = null;
-            addSystemLog("TRACKS CLEARED BY COMMAND");
-        }
+/* Your Hardware Brackets */
+.panel::before {
+    content: ''; position: absolute; top: -1px; left: -1px; width: 12px; height: 12px;
+    border-top: 2px solid var(--text-neon-green); border-left: 2px solid var(--text-neon-green);
+}
+.panel::after {
+    content: ''; position: absolute; bottom: -1px; right: -1px; width: 12px; height: 12px;
+    border-bottom: 2px solid var(--text-neon-green); border-right: 2px solid var(--text-neon-green);
+}
 
-        const feedEl = document.getElementById('mission-feed');
-        function addSystemLog(msg, isAlert = false) {
-            const now = new Date();
-            const timeStr = now.toTimeString().split(' ')[0];
-            const logDiv = document.createElement('div');
-            logDiv.className = `log-entry ${isAlert ? 'alert' : ''}`;
-            logDiv.innerHTML = `<span class="log-time">${timeStr}</span><span style="color: ${isAlert ? '#ff3333' : '#fff'}">${msg}</span>`;
-            feedEl.insertBefore(logDiv, feedEl.children[1]); 
-            if(feedEl.children.length > 50) feedEl.removeChild(feedEl.lastChild); 
-        }
+.panel-title { 
+    color: var(--text-bright); font-size: 1rem; font-weight: bold; margin-bottom: 15px; 
+    border-bottom: 1px solid var(--border-color); padding-bottom: 5px; letter-spacing: 2px; 
+}
 
-        // 4. WEBSOCKET CONNECTION
-        const ws = new WebSocket("ws://localhost:8000/ws/tactical");
-        const commsIndicator = document.getElementById("comms-indicator");
+.telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.data-label { color: var(--text-muted); font-size: 0.8rem; letter-spacing: 1px;}
+.data-value { color: var(--text-neon-green); font-size: 1.5rem; font-weight: bold; margin-top: 3px; }
+.alert-value { color: var(--text-neon-red); }
 
-        ws.onopen = function() {
-            commsIndicator.innerText = "🟢 COMMS: SECURE";
-            commsIndicator.className = "comms-status comms-active";
-            addSystemLog("WEBSOCKET UPLINK ESTABLISHED", false);
-        };
+#mission-feed { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; background-color: var(--panel-bg); border: 1px solid var(--border-color); }
+.log-entry { 
+    font-size: 0.9rem; line-height: 1.4; border-left: 3px solid var(--border-highlight); 
+    padding: 6px 10px; background: rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 2px;
+}
+.log-entry.alert { border-left-color: var(--text-neon-red); color: var(--text-neon-red); background: rgba(255,51,51,0.08); }
+.log-time { color: var(--text-muted); font-size: 0.8rem; }
 
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            
-            // Extract Backend Data
-            const lat = data.latitude || data.location[0];
-            const lon = data.longitude || data.location[1];
-            const type = (data.simulation_type || data.target_type || "UNKNOWN").toUpperCase();
-            const conf = data.confidence ? (data.confidence * 100).toFixed(1) : (Math.random() * 20 + 80).toFixed(1); // Fallback if confidence is missing
-            const status = "ACTIVE"; // If it's hitting WS, it's active
+/* LEAFLET OVERRIDES (Fixing the white bubbles) */
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: var(--panel-bg) !important;
+    border: 1px solid var(--border-highlight);
+    color: var(--text-bright) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    font-family: 'Share Tech Mono', monospace;
+}
+.leaflet-container a.leaflet-popup-close-button { color: var(--text-muted) !important; }
 
-            // Update Telemetry Panel
-            document.getElementById("tel-type").innerText = type;
-            document.getElementById("tel-status").innerText = status;
-            document.getElementById("tel-status").className = "data-value alert-value";
-            document.getElementById("tel-conf").innerText = conf + "%";
-            document.getElementById("tel-coords").innerText = `[${lat.toFixed(5)}, ${lon.toFixed(5)}]`;
-
-            // Update Map Graphics
-            pathHistory.push([lat, lon]);
-            
-            if (!activeTargetMarker) {
-                activeTargetMarker = L.circleMarker([lat, lon], { color: '#ff3333', fillColor: '#ff3333', fillOpacity: 0.9, radius: 6 }).addTo(map);
-                trackPolyline = L.polyline(pathHistory, { color: '#ff3333', dashArray: '5, 5', weight: 2 }).addTo(map);
-            } else {
-                activeTargetMarker.setLatLng([lat, lon]);
-                trackPolyline.setLatLngs(pathHistory);
-            }
-
-            // Update Mission Feed
-            addSystemLog(`[${type}] INTRUSION: LAT ${lat.toFixed(4)} LON ${lon.toFixed(4)}`, true);
-        };
-
-        ws.onclose = function() {
-            commsIndicator.innerText = "🔴 COMMS: OFFLINE";
-            commsIndicator.className = "comms-status";
-            addSystemLog("WEBSOCKET UPLINK LOST", true);
-        };
-    </script>
-</body>
-</html>
+/* CONTROLS */
+#controls { display: flex; align-items: center; justify-content: flex-end; gap: 20px;}
+.btn-primary { 
+    background-color: rgba(0,0,0,0.5); color: var(--text-bright); border: 1px solid var(--border-highlight); 
+    padding: 10px 20px; font-family: inherit; font-size: 1rem; cursor: pointer; transition: all 0.2s; letter-spacing: 2px; 
+}
+.btn-primary:hover { color: var(--bg-color); border-color: var(--text-neon-green); background-color: var(--text-neon-green); }

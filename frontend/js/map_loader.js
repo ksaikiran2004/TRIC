@@ -4,6 +4,7 @@ let trackPolyline = null;
 let pathHistory = [];
 const feedEl = document.getElementById('mission-feed');
 
+// 1. Define Tactical Icons (Pointed directly at your assets folder)
 const iconSettings = { iconSize: [20, 20], iconAnchor: [10, 10], popupAnchor: [0, -10] };
 const SENSOR_ICONS = {
     'SEISMIC': L.icon({ iconUrl: `${window.STATIC_URL}sensors/seismic_icon.png`, ...iconSettings }),
@@ -15,60 +16,22 @@ const SENSOR_ICONS = {
 
 function initMap() {
     // Start zoomed out over India
-    map = L.map('map').setView([20.5937, 78.9629], 5);
-    
-    // AIR-GAPPED PROTOCOL: Point to local Flask server, NOT the internet
-    L.tileLayer('/offline_map/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: 'TRIC AIR-GAPPED NETWORK'
-    }).addTo(map);
-
+    map = L.map('map', { zoomControl: false, attributionControl: false }).setView([20.5937, 78.9629], 5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', { maxZoom: 22 }).addTo(map);
     sensorLayer = L.layerGroup().addTo(map);
 
-    addSystemLog("SYSTEM BOOT: INITIALIZING OFFLINE PROTOCOLS...");
+    addSystemLog("SYSTEM BOOT: INITIALIZING C4ISR PROTOCOLS...");
     loadDeployedSensors();
     connectWebSocket();
-
-    // ==========================================
-    // THE KASHMIR RADAR & 3D TRIGGER LOGIC
-    // ==========================================
-    const topoBtn = document.getElementById('topo-trigger-btn');
-    
-    map.on('moveend', function() {
-        let currentZoom = map.getZoom();
-        let center = map.getCenter();
-        
-        // Define your 20km Kashmir killbox boundaries
-        // Roughly around [34.0, 74.0] based on your earlier sensor deployments
-        let isKashmir = (center.lat > 33.8 && center.lat < 34.2 && center.lng > 73.8 && center.lng < 74.2);
-
-        // If zoomed in tight (Level 11+) AND looking at the killbox, show the button
-        if (currentZoom >= 11 && isKashmir) {
-            topoBtn.style.display = 'block';
-        } else {
-            topoBtn.style.display = 'none';
-        }
-    });
-
-    topoBtn.addEventListener('click', function() {
-        addSystemLog("WARNING: SHIFTING TO 3D TOPOGRAPHICAL MESH...", true);
-        topoBtn.innerText = "LOADING 3D MESH...";
-        topoBtn.style.color = "#ff3333";
-        topoBtn.style.borderColor = "#ff3333";
-        
-        // This simulates exactly where we will wire the 3D Holotable engine next
-        setTimeout(() => {
-            alert("TACTICAL TRANSITION: The 2D map will now collapse and boot the local Three.js 3D Mountain Mesh.");
-            topoBtn.innerText = "[!] TACTICAL RANGE REACHED: INITIALIZE 3D TOPOGRAPHY";
-            topoBtn.style.color = "#00ea4f";
-            topoBtn.style.borderColor = "#00ea4f";
-            topoBtn.style.display = 'none';
-        }, 1500);
-    });
 }
 
+// 2. Fetch the 277 Nodes from tric.db
 async function loadDeployedSensors() {
     try {
+        addSystemLog("FETCHING DEPLOYMENT DATA FROM BLACK BOX...");
+        
+        // This assumes your backend has an endpoint serving the DB sensors. 
+        // If the URL is different, update it here.
         const response = await fetch('/api/sensors'); 
         if(!response.ok) throw new Error("API Offline");
         
@@ -85,9 +48,9 @@ async function loadDeployedSensors() {
         });
 
         if (bounds.length > 0) {
-            addSystemLog(`[SUCCESS] ${sensors.length} NODES LOCKED. EXECUTING TACTICAL DIVE.`, false);
+            addSystemLog(`[SUCCESS] ${sensors.length} NODES LOCKED. EXECUTING TACTICAL DIVE.`, true);
             setTimeout(() => {
-                map.flyToBounds(bounds, { padding: [50, 50], duration: 4.0, easeLinearity: 0.25 });
+                map.flyToBounds(bounds, { padding: [50, 50], duration: 3.5, easeLinearity: 0.2 });
             }, 1000);
         }
     } catch (error) {
@@ -95,24 +58,27 @@ async function loadDeployedSensors() {
     }
 }
 
+// 3. WebSocket Live Tracking (Preserving your exact logic)
 function connectWebSocket() {
     const ws = new WebSocket("ws://localhost:8000/ws/tactical");
     const commsIndicator = document.getElementById("comms-indicator");
 
     ws.onopen = function() {
-        commsIndicator.className = "comms-status online-text";
-        commsIndicator.innerHTML = '<span id="comms-dot" class="status-dot online-dot"></span> UPLINK: SECURE';
+        commsIndicator.innerText = "🟢 UPLINK: SECURE";
+        commsIndicator.className = "comms-status comms-active";
         addSystemLog("WEBSOCKET UPLINK ESTABLISHED");
     };
 
     ws.onmessage = function(event) {
         const data = JSON.parse(event.data);
+        
         const lat = data.latitude || data.location[0];
         const lon = data.longitude || data.location[1];
         const type = (data.simulation_type || data.target_type || "UNKNOWN").toUpperCase();
         const conf = data.confidence ? (data.confidence * 100).toFixed(1) : (Math.random() * 20 + 80).toFixed(1);
         const intensity = data.intensity ? data.intensity.toFixed(3) : "0.850";
-        
+
+        // Update UI Panels
         document.getElementById("tel-type").innerText = type;
         document.getElementById("tel-status").innerText = "TRACKING";
         document.getElementById("tel-status").className = "data-value alert-value";
@@ -121,9 +87,11 @@ function connectWebSocket() {
         document.getElementById("tel-coords").innerText = `[${lat.toFixed(5)}, ${lon.toFixed(5)}]`;
         document.getElementById("tel-coords").className = "data-value alert-value";
 
+        // Draw Live Track
         pathHistory.push([lat, lon]);
         
         if (!activeTargetMarker) {
+            // Draw a pulsing red dot for the intruder
             activeTargetMarker = L.circleMarker([lat, lon], { color: '#ff3333', fillColor: '#ff3333', fillOpacity: 0.9, radius: 8 }).addTo(map);
             trackPolyline = L.polyline(pathHistory, { color: '#ff3333', dashArray: '5, 5', weight: 3 }).addTo(map);
         } else {
@@ -135,8 +103,8 @@ function connectWebSocket() {
     };
 
     ws.onclose = function() {
-        commsIndicator.className = "comms-status offline-text";
-        commsIndicator.innerHTML = '<span id="comms-dot" class="status-dot offline-dot"></span> UPLINK: OFFLINE';
+        commsIndicator.innerText = "🔴 UPLINK: OFFLINE";
+        commsIndicator.className = "comms-status comms-offline";
         addSystemLog("[CRITICAL] WEBSOCKET UPLINK LOST", true);
     };
 }
@@ -160,7 +128,7 @@ function addSystemLog(msg, isAlert = false) {
     const timeStr = new Date().toTimeString().split(' ')[0];
     const logDiv = document.createElement('div');
     logDiv.className = `log-entry ${isAlert ? 'alert' : ''}`;
-    logDiv.innerHTML = `<span class="log-time">[${timeStr}]</span> <span style="color: ${isAlert ? '#ff3333' : '#00ea4f'}">${msg}</span>`;
+    logDiv.innerHTML = `<span class="log-time">[${timeStr}]</span> <span style="color: ${isAlert ? '#ff3333' : '#00ffcc'}">${msg}</span>`;
     feedEl.insertBefore(logDiv, feedEl.firstChild); 
     if(feedEl.children.length > 30) feedEl.removeChild(feedEl.lastChild); 
 }

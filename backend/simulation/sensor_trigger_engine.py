@@ -6,6 +6,7 @@ Responsibilities:
     - Simulate optional latency
     - Forward intrusion to AlertEngine (with safe handling)
     - Return structured simulation result
+    - [NEW] Safely log confirmed events to persistent Black Box (tric.db)
 """
 
 from typing import Optional, Literal
@@ -13,18 +14,19 @@ from dataclasses import dataclass, field
 import random
 import time
 import uuid
+import sqlite3
+import os
+from datetime import datetime
 
 from backend.models.sensor_model import ConfirmedEvent
 from backend.confirmation.alert_engine import AlertEngine
 from backend.config import Config
 
-
 # =========================================================
 # TYPES
 # =========================================================
 
-SimulationType = Literal["footsteps", "animal", "vehicle"]
-
+SimulationType = Literal["human", "animal", "vehicle"]
 
 @dataclass
 class SimulationResult:
@@ -46,24 +48,20 @@ class SimulationResult:
     def confidence(self) -> float:
         return self.event.confidence_score if self.event else 0.0
 
-
 # =========================================================
 # RNG (Isolated for reproducibility)
 # =========================================================
 
 _rng = random.Random()
 
-
 def set_seed(seed: int) -> None:
     _rng.seed(seed)
-
 
 # =========================================================
 # CONSTANTS
 # =========================================================
 
 INTENSITY_PROFILE = Config.simulation.INTENSITY_PROFILE
-
 
 # =========================================================
 # UTILITIES
@@ -89,6 +87,43 @@ def generate_intensity(simulation_type: SimulationType) -> float:
     intensity = max(0.0, min(1.0, intensity + noise))
     return intensity
 
+def log_simulation_to_db(result: SimulationResult) -> None:
+    """
+    [NEW] Silently logs confirmed intrusion events to the SQLite logs table.
+    Decoupled from main execution to prevent interference with AlertEngine.
+    """
+    if not result.event:
+        return 
+
+    # Dynamic path resolution to data/tric.db
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(current_dir, '../../'))
+    db_path = os.path.join(project_root, 'data', 'tric.db')
+
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Guard clause to ensure table exists
+        cursor.execute('''CREATE TABLE IF NOT EXISTS logs 
+                          (id INTEGER PRIMARY KEY, timestamp DATETIME, sensor_id INTEGER, event_type TEXT)''')
+
+        timestamp_str = datetime.fromtimestamp(result.timestamp).strftime("%Y-%m-%d %H:%M:%S")
+        event_type = f"INTRUSION_{result.simulation_type.upper()}"
+
+        # Safely extract sensor IDs from the ConfirmedEvent
+        sensors = getattr(result.event, 'sensors_triggered', [])
+        for sensor in sensors:
+            s_id = getattr(sensor, 'id', getattr(sensor, 'sensor_id', 0))
+            cursor.execute("INSERT INTO logs (timestamp, sensor_id, event_type) VALUES (?, ?, ?)", 
+                           (timestamp_str, s_id, event_type))
+
+        conn.commit()
+    except Exception as e:
+        print(f"[DB ERROR] Failed to write to TRIC Black Box: {e}")
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
 # =========================================================
 # CORE FUNCTIONS
@@ -142,7 +177,7 @@ def simulate_intrusion(
 
     if debug:
         if event:
-            sensor_count = len(event.sensors_triggered)
+            sensor_count = len(getattr(event, 'sensors_triggered', []))
             status = f"CONFIRMED ({sensor_count} sensors)"
         else:
             status = "REJECTED"
@@ -155,7 +190,7 @@ def simulate_intrusion(
             f"status={status}"
         )
 
-    return SimulationResult(
+    result = SimulationResult(
         event=event,
         intensity=intensity,
         simulation_type=simulation_type,
@@ -165,9 +200,14 @@ def simulate_intrusion(
         error=error_msg
     )
 
+    # [NEW] Forward to persistence layer
+    if event:
+        log_simulation_to_db(result)
+
+    return result
 
 # =========================================================
-# PUBLIC APIs (Split Cleanly)
+# PUBLIC APIs
 # =========================================================
 
 def run_simulation_step_event(
@@ -179,9 +219,6 @@ def run_simulation_step_event(
     simulate_latency: bool = False,
     use_gaussian_latency: bool = False,
 ) -> Optional[ConfirmedEvent]:
-    """
-    Returns only the ConfirmedEvent (simple API).
-    """
     return simulate_intrusion(
         alert_engine,
         intrusion_lat,
@@ -192,7 +229,6 @@ def run_simulation_step_event(
         use_gaussian_latency=use_gaussian_latency
     ).event
 
-
 def run_simulation_step_full(
     alert_engine: AlertEngine,
     intrusion_lat: float,
@@ -202,9 +238,6 @@ def run_simulation_step_full(
     simulate_latency: bool = False,
     use_gaussian_latency: bool = False,
 ) -> SimulationResult:
-    """
-    Returns full SimulationResult (advanced API).
-    """
     return simulate_intrusion(
         alert_engine,
         intrusion_lat,

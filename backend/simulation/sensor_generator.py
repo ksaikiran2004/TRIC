@@ -15,11 +15,13 @@ Infrared sensors are deployed every N nodes.
 Output:
     List[Sensor] compatible with AlertEngine
 """
-
+import sys
+import sqlite3
+import os
 import json
 from pathlib import Path
 from typing import List, Tuple
-
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from backend.models.sensor_model import Sensor, SensorType
 
 
@@ -238,3 +240,49 @@ def generate_sensor_network(
     )
 
     return sensors
+
+
+# =========================================================
+# DATABASE PERSISTENCE INTEGRATION
+# =========================================================
+
+def save_sensors_to_db(sensors: List[Sensor]):
+    """Locks the generated tactical sensor network into persistent SQLite storage."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(current_dir, '../../'))
+    db_path = os.path.join(project_root, 'data', 'tric.db')
+
+    # Ensure the data directory exists
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # Clear old deployment to prevent stacking ghosts on rerun
+    cursor.execute("DELETE FROM sensors")
+
+    # Extract data from Sensor objects
+    sensor_data = []
+    for s in sensors:
+        stype_name = s.sensor_type.name if hasattr(s.sensor_type, 'name') else str(s.sensor_type)
+        sensor_data.append((stype_name, 'ACTIVE', s.latitude, s.longitude))
+
+    # Bulk insert for maximum performance
+    cursor.executemany("INSERT INTO sensors (type, status, lat, lon) VALUES (?, ?, ?, ?)", sensor_data)
+    
+    conn.commit()
+    print(f"[SUCCESS] {len(sensors)} sensors locked into the command database.")
+    conn.close()
+
+
+if __name__ == "__main__":
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(current_dir, '../../'))
+    geo_path = os.path.join(project_root, 'frontend', 'geo', 'border_line.geojson')
+
+    try:
+        print(f"Reading deployment line from {geo_path}...")
+        network = generate_sensor_network(geo_path)
+        save_sensors_to_db(network)
+    except FileNotFoundError as e:
+        print(f"[ERROR] {e}")
