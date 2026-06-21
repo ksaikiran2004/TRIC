@@ -2,7 +2,12 @@ let map, sensorLayer;
 let activeTargetMarker = null;
 let trackPolyline = null;
 let pathHistory = [];
+let deploymentBounds = null; 
 const feedEl = document.getElementById('mission-feed');
+
+// 3D Holotable Engine Instances
+let holotableInstance = null;
+let is3DModeActive = false;
 
 const iconSettings = { iconSize: [20, 20], iconAnchor: [10, 10], popupAnchor: [0, -10] };
 const SENSOR_ICONS = {
@@ -14,10 +19,8 @@ const SENSOR_ICONS = {
 };
 
 function initMap() {
-    // Start zoomed out over India
     map = L.map('map').setView([20.5937, 78.9629], 5);
     
-    // AIR-GAPPED PROTOCOL: Point to local Flask server, NOT the internet
     L.tileLayer('/offline_map/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: 'TRIC AIR-GAPPED NETWORK'
@@ -29,20 +32,16 @@ function initMap() {
     loadDeployedSensors();
     connectWebSocket();
 
-    // ==========================================
-    // THE KASHMIR RADAR & 3D TRIGGER LOGIC
-    // ==========================================
     const topoBtn = document.getElementById('topo-trigger-btn');
+    const holoControls = document.getElementById('holotable-controls');
+    const return2dBtn = document.getElementById('return-2d-btn');
     
     map.on('moveend', function() {
+        if(is3DModeActive) return;
         let currentZoom = map.getZoom();
         let center = map.getCenter();
-        
-        // Define your 20km Kashmir killbox boundaries
-        // Roughly around [34.0, 74.0] based on your earlier sensor deployments
         let isKashmir = (center.lat > 33.8 && center.lat < 34.2 && center.lng > 73.8 && center.lng < 74.2);
 
-        // If zoomed in tight (Level 11+) AND looking at the killbox, show the button
         if (currentZoom >= 11 && isKashmir) {
             topoBtn.style.display = 'block';
         } else {
@@ -50,20 +49,36 @@ function initMap() {
         }
     });
 
+    // EXECUTE HANDSHAKE TO 3D HOLOTABLE
     topoBtn.addEventListener('click', function() {
-        addSystemLog("WARNING: SHIFTING TO 3D TOPOGRAPHICAL MESH...", true);
-        topoBtn.innerText = "LOADING 3D MESH...";
-        topoBtn.style.color = "#ff3333";
-        topoBtn.style.borderColor = "#ff3333";
+        addSystemLog("WARNING: INITIALIZING WEBGL 3D HOLOTABLE...", true);
+        is3DModeActive = true;
+        topoBtn.style.display = 'none';
+        document.getElementById('map').style.display = 'none';
+        document.getElementById('holotable-canvas').style.display = 'block';
+        holoControls.style.display = 'flex';
+
+        // Spin up the WebGL engine context
+        holotableInstance = new TacticalHolotable('holotable-canvas');
         
-        // This simulates exactly where we will wire the 3D Holotable engine next
-        setTimeout(() => {
-            alert("TACTICAL TRANSITION: The 2D map will now collapse and boot the local Three.js 3D Mountain Mesh.");
-            topoBtn.innerText = "[!] TACTICAL RANGE REACHED: INITIALIZE 3D TOPOGRAPHY";
-            topoBtn.style.color = "#00ea4f";
-            topoBtn.style.borderColor = "#00ea4f";
-            topoBtn.style.display = 'none';
-        }, 1500);
+        pathHistory.forEach(coords => {
+            holotableInstance.updateTargetPosition(coords[0], coords[1], deploymentBounds);
+        });
+    });
+
+    // REVERT HANDSHAKE PROTOCOL
+    return2dBtn.addEventListener('click', function() {
+        addSystemLog("COLLAPSING 3D MESH: RETURNING TO 2D AIR-SPACE OVERLAY.");
+        is3DModeActive = false;
+        holoControls.style.display = 'none';
+        document.getElementById('holotable-canvas').style.display = 'none';
+        document.getElementById('map').style.display = 'block';
+        
+        if(holotableInstance) {
+            holotableInstance.shutdown();
+            holotableInstance = null;
+        }
+        map.invalidateSize();
     });
 }
 
@@ -73,21 +88,29 @@ async function loadDeployedSensors() {
         if(!response.ok) throw new Error("API Offline");
         
         const sensors = await response.json();
-        let bounds = [];
+        let lats = [], lons = [];
 
         sensors.forEach(sensor => {
-            let icon = SENSOR_ICONS[sensor.type] || SENSOR_ICONS['DEFAULT'];
+            let rawType = String(sensor.type).replace('SensorType.', '').toUpperCase().trim();
+            let icon = SENSOR_ICONS[rawType] || SENSOR_ICONS['DEFAULT'];
             let marker = L.marker([sensor.lat, sensor.lon], { icon: icon });
             
-            marker.bindPopup(`<b>NODE: ${sensor.id}</b><br>TYPE: ${sensor.type}<br>STAT: ONLINE`);
+            marker.bindPopup(`<b>NODE: ${sensor.id}</b><br>TYPE: ${rawType}<br>STAT: ONLINE`);
             sensorLayer.addLayer(marker);
-            bounds.push([sensor.lat, sensor.lon]);
+            
+            lats.push(sensor.lat);
+            lons.push(sensor.lon);
         });
 
-        if (bounds.length > 0) {
+        if (lats.length > 0) {
+            deploymentBounds = [
+                [Math.min(...lats) - 0.05, Math.min(...lons) - 0.05],
+                [Math.max(...lats) + 0.05, Math.max(...lons) + 0.05]
+            ];
+            
             addSystemLog(`[SUCCESS] ${sensors.length} NODES LOCKED. EXECUTING TACTICAL DIVE.`, false);
             setTimeout(() => {
-                map.flyToBounds(bounds, { padding: [50, 50], duration: 4.0, easeLinearity: 0.25 });
+                map.flyToBounds(deploymentBounds, { padding: [50, 50], duration: 4.0, easeLinearity: 0.25 });
             }, 1000);
         }
     } catch (error) {
@@ -123,6 +146,10 @@ function connectWebSocket() {
 
         pathHistory.push([lat, lon]);
         
+        if (is3DModeActive && holotableInstance) {
+            holotableInstance.updateTargetPosition(lat, lon, deploymentBounds);
+        }
+
         if (!activeTargetMarker) {
             activeTargetMarker = L.circleMarker([lat, lon], { color: '#ff3333', fillColor: '#ff3333', fillOpacity: 0.9, radius: 8 }).addTo(map);
             trackPolyline = L.polyline(pathHistory, { color: '#ff3333', dashArray: '5, 5', weight: 3 }).addTo(map);
@@ -141,12 +168,22 @@ function connectWebSocket() {
     };
 }
 
+function setHoloMode(mode) {
+    if(holotableInstance) {
+        holotableInstance.setInteractionMode(mode);
+    }
+}
+
 function clearMap() {
     if(activeTargetMarker) map.removeLayer(activeTargetMarker);
     if(trackPolyline) map.removeLayer(trackPolyline);
     pathHistory = [];
     activeTargetMarker = null;
     trackPolyline = null;
+    
+    if(holotableInstance) {
+        holotableInstance.clearTrack();
+    }
     
     document.getElementById("tel-status").innerText = "STANDBY";
     document.getElementById("tel-status").className = "data-value";
