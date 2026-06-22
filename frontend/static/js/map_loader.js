@@ -1,83 +1,205 @@
+// ==========================================
+// AUTHENTICATION & BOOT SEQUENCE
+// ==========================================
+function verifyLogin() {
+    const user = document.getElementById('auth-id').value;
+    const pass = document.getElementById('auth-pass').value;
+    if (user === "admin" && pass === "admin") {
+        document.getElementById('login-view').style.display = 'none';
+        document.getElementById('device-view').style.display = 'block';
+    } else {
+        document.getElementById('login-err').style.display = 'block';
+    }
+}
+
+function bootSystem(mode) {
+    document.getElementById('boot-screen').style.display = 'none';
+    document.getElementById('main-dashboard').style.display = 'flex';
+    
+    if (mode === 'mobile') {
+        document.body.classList.add('mobile-mode');
+    }
+    
+    setTimeout(() => {
+        initMap();
+        initSplitter(); // Start the dynamic layout resizer
+        initUAVDrag();  // Enable drone window dragging
+        setTimeout(() => { if (map) map.invalidateSize(); }, 150);
+    }, 250);
+}
+
+// ==========================================
+// UI INTERACTION CONTROLLERS
+// ==========================================
+function toggleUAV() {
+    const modal = document.getElementById('uav-modal');
+    if (modal.style.display === 'none' || modal.style.display === '') {
+        modal.style.display = 'flex'; // Flex is required so the image stretches
+    } else {
+        modal.style.display = 'none';
+    }
+}
+
+function initSplitter() {
+    const splitter = document.getElementById('splitter');
+    const sidebar = document.getElementById('sidebar');
+    let isResizing = false;
+
+    splitter.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        splitter.classList.add('active');
+        document.body.style.cursor = 'col-resize';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        
+        // Calculate new sidebar width
+        let newWidth = window.innerWidth - e.clientX;
+        if (newWidth >= 250 && newWidth <= 800) {
+            sidebar.style.width = newWidth + 'px';
+            
+            // Aggressively resize maps to prevent tearing
+            if (map && !is3DModeActive) map.invalidateSize();
+            if (holotableInstance && is3DModeActive) holotableInstance.resize();
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            splitter.classList.remove('active');
+            document.body.style.cursor = 'default';
+        }
+    });
+}
+
+function initUAVDrag() {
+    const modal = document.getElementById('uav-modal');
+    const header = modal.querySelector('.uav-header');
+    let isDragging = false;
+    let offsetX = 0, offsetY = 0;
+
+    header.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        offsetX = e.clientX - modal.offsetLeft;
+        offsetY = e.clientY - modal.offsetTop;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        modal.style.left = (e.clientX - offsetX) + 'px';
+        modal.style.top = (e.clientY - offsetY) + 'px';
+    });
+
+    document.addEventListener('mouseup', () => { isDragging = false; });
+}
+
+// ==========================================
+// MAP & HOLOTABLE LOGIC
+// ==========================================
 let map, sensorLayer;
 let activeTargetMarker = null;
 let trackPolyline = null;
 let pathHistory = [];
 let deploymentBounds = null; 
+let globalSensorData = []; 
 const feedEl = document.getElementById('mission-feed');
 
-// 3D Holotable Engine Instances
 let holotableInstance = null;
 let is3DModeActive = false;
 
-const iconSettings = { iconSize: [20, 20], iconAnchor: [10, 10], popupAnchor: [0, -10] };
-const SENSOR_ICONS = {
-    'SEISMIC': L.icon({ iconUrl: `${window.STATIC_URL}sensors/seismic_icon.png`, ...iconSettings }),
-    'ACOUSTIC': L.icon({ iconUrl: `${window.STATIC_URL}sensors/acoustic_icon.png`, ...iconSettings }),
-    'RADAR': L.icon({ iconUrl: `${window.STATIC_URL}sensors/radar_icon.png`, ...iconSettings }),
-    'INFRARED': L.icon({ iconUrl: `${window.STATIC_URL}sensors/pir_icon.png`, ...iconSettings }),
-    'DEFAULT': L.icon({ iconUrl: `${window.STATIC_URL}sensors/magnetic_icon.png`, ...iconSettings })
+const LOC_COORDS = [
+    [34.40, 73.80], [34.37, 73.83], [34.38, 73.88],
+    [34.32, 73.94], [34.29, 74.02], [34.24, 74.08],
+    [34.22, 74.15], [34.16, 74.22]
+];
+
+const createTacticalIcon = (color, label, isRadar = false) => {
+    const animClass = isRadar ? 'radar-sweep' : 'sensorPulse';
+    return L.divIcon({
+        className: 'custom-tactical-icon',
+        html: `<div style="border: 1px solid ${color}; background: rgba(0,0,0,0.8); color: ${color}; font-size: 11px; padding: 2px 6px; font-family: monospace; font-weight: bold; border-radius: 2px; box-shadow: 0 0 8px ${color}; display: flex; align-items: center; gap: 6px;">
+                  <div style="width: 8px; height: 8px; background: ${color}; border-radius: 50%; display: inline-block; animation: ${animClass} 1.5s infinite;"></div>
+                  ${label}
+               </div>`,
+        iconSize: [70, 24],
+        iconAnchor: [35, 12],
+        popupAnchor: [0, -15]
+    });
 };
 
+const SENSOR_ICONS = {
+    'SEISMIC': createTacticalIcon('#00ea4f', 'SEIS'),
+    'ACOUSTIC': createTacticalIcon('#00a5ff', 'ACOU'),
+    'INFRARED': createTacticalIcon('#ff9900', 'PIR'),
+    'RADAR': createTacticalIcon('#ff3333', 'RDR', true)
+};
+
+function drawTacticalBorder() {
+    L.polyline(LOC_COORDS, { color: '#ff1100', weight: 8, opacity: 0.3, dashArray: '15, 10' }).addTo(map);
+    L.polyline(LOC_COORDS, { color: '#ffffff', weight: 2, opacity: 0.9, dashArray: '15, 10' }).addTo(map);
+}
+
 function initMap() {
-    map = L.map('map').setView([20.5937, 78.9629], 5);
+    map = L.map('map').setView([34.28, 74.00], 10); 
     
-    L.tileLayer('/offline_map/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: 'TRIC AIR-GAPPED NETWORK'
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 18,
+        className: 'tactical-map-filter',
+        attribution: 'TRIC SATELLITE UPLINK'
     }).addTo(map);
 
     sensorLayer = L.layerGroup().addTo(map);
 
-    addSystemLog("SYSTEM BOOT: INITIALIZING OFFLINE PROTOCOLS...");
+    addSystemLog("SYSTEM BOOT: INITIALIZING SATELLITE PROTOCOLS...");
+    drawTacticalBorder();
     loadDeployedSensors();
     connectWebSocket();
 
     const topoBtn = document.getElementById('topo-trigger-btn');
     const holoControls = document.getElementById('holotable-controls');
     const return2dBtn = document.getElementById('return-2d-btn');
+    const altimeterHud = document.getElementById('altimeter-hud'); 
     
     map.on('moveend', function() {
         if(is3DModeActive) return;
         let currentZoom = map.getZoom();
-        let center = map.getCenter();
-        let isKashmir = (center.lat > 33.8 && center.lat < 34.2 && center.lng > 73.8 && center.lng < 74.2);
-
-        if (currentZoom >= 11 && isKashmir) {
+        if (currentZoom >= 10) {
             topoBtn.style.display = 'block';
         } else {
             topoBtn.style.display = 'none';
         }
     });
 
-    // EXECUTE HANDSHAKE TO 3D HOLOTABLE
     topoBtn.addEventListener('click', function() {
         addSystemLog("WARNING: INITIALIZING WEBGL 3D HOLOTABLE...", true);
         is3DModeActive = true;
         topoBtn.style.display = 'none';
         document.getElementById('map').style.display = 'none';
-        document.getElementById('holotable-canvas').style.display = 'block';
-        holoControls.style.display = 'flex';
-
-        // Spin up the WebGL engine context
-        holotableInstance = new TacticalHolotable('holotable-canvas');
         
-        pathHistory.forEach(coords => {
-            holotableInstance.updateTargetPosition(coords[0], coords[1], deploymentBounds);
-        });
+        const canvasDiv = document.getElementById('holotable-canvas');
+        canvasDiv.style.display = 'block';
+        holoControls.style.display = 'flex';
+        altimeterHud.style.display = 'block'; 
+
+        setTimeout(() => {
+            if (!holotableInstance) {
+                holotableInstance = new TacticalHolotable('holotable-canvas');
+            } else {
+                holotableInstance.resize(); 
+            }
+            holotableInstance.loadSensors(globalSensorData, deploymentBounds, LOC_COORDS);
+        }, 150);
     });
 
-    // REVERT HANDSHAKE PROTOCOL
     return2dBtn.addEventListener('click', function() {
         addSystemLog("COLLAPSING 3D MESH: RETURNING TO 2D AIR-SPACE OVERLAY.");
         is3DModeActive = false;
         holoControls.style.display = 'none';
+        altimeterHud.style.display = 'none'; 
         document.getElementById('holotable-canvas').style.display = 'none';
         document.getElementById('map').style.display = 'block';
-        
-        if(holotableInstance) {
-            holotableInstance.shutdown();
-            holotableInstance = null;
-        }
         map.invalidateSize();
     });
 }
@@ -87,32 +209,53 @@ async function loadDeployedSensors() {
         const response = await fetch('/api/sensors'); 
         if(!response.ok) throw new Error("API Offline");
         
-        const sensors = await response.json();
+        let sensors = await response.json();
         let lats = [], lons = [];
+        let sIndex = 0;
+        
+        for (let i = 0; i < LOC_COORDS.length - 1; i++) {
+            let start = LOC_COORDS[i];
+            let end = LOC_COORDS[i+1];
+            
+            for(let j=0; j < 35; j++) {
+                if(sIndex >= sensors.length) break;
+                
+                let fraction = j / 35;
+                let baseLat = start[0] + (end[0] - start[0]) * fraction;
+                let baseLon = start[1] + (end[1] - start[1]) * fraction;
 
-        sensors.forEach(sensor => {
-            let rawType = String(sensor.type).replace('SensorType.', '').toUpperCase().trim();
-            let icon = SENSOR_ICONS[rawType] || SENSOR_ICONS['DEFAULT'];
-            let marker = L.marker([sensor.lat, sensor.lon], { icon: icon });
-            
-            marker.bindPopup(`<b>NODE: ${sensor.id}</b><br>TYPE: ${rawType}<br>STAT: ONLINE`);
-            sensorLayer.addLayer(marker);
-            
-            lats.push(sensor.lat);
-            lons.push(sensor.lon);
-        });
+                let s = sensors[sIndex];
+                
+                if (j % 4 === 0) {
+                    s.tacticalType = 'RADAR';
+                    s.lat = baseLat - 0.04; 
+                    s.lon = baseLon - 0.04;
+                } else if (j % 2 === 0) {
+                    s.tacticalType = 'INFRARED';
+                    s.lat = baseLat - 0.015;
+                    s.lon = baseLon - 0.015;
+                } else {
+                    s.tacticalType = j % 3 === 0 ? 'ACOUSTIC' : 'SEISMIC';
+                    s.lat = baseLat + (Math.random() * 0.002 - 0.001); 
+                    s.lon = baseLon + (Math.random() * 0.002 - 0.001);
+                }
 
-        if (lats.length > 0) {
-            deploymentBounds = [
-                [Math.min(...lats) - 0.05, Math.min(...lons) - 0.05],
-                [Math.max(...lats) + 0.05, Math.max(...lons) + 0.05]
-            ];
-            
-            addSystemLog(`[SUCCESS] ${sensors.length} NODES LOCKED. EXECUTING TACTICAL DIVE.`, false);
-            setTimeout(() => {
-                map.flyToBounds(deploymentBounds, { padding: [50, 50], duration: 4.0, easeLinearity: 0.25 });
-            }, 1000);
+                globalSensorData.push(s);
+
+                let marker = L.marker([s.lat, s.lon], { icon: SENSOR_ICONS[s.tacticalType] });
+                marker.bindPopup(`<b>NODE: ${s.id}</b><br>TYPE: ${s.tacticalType}<br>STAT: ONLINE`);
+                sensorLayer.addLayer(marker);
+                
+                lats.push(s.lat);
+                lons.push(s.lon);
+                sIndex++;
+            }
         }
+
+        deploymentBounds = [ [Math.min(...lats) - 0.02, Math.min(...lons) - 0.02], [Math.max(...lats) + 0.02, Math.max(...lons) + 0.02] ];
+        map.fitBounds(deploymentBounds);
+        addSystemLog(`[SUCCESS] 3-TIER GRID DEPLOYED ALONG LoC.`, false);
+        
     } catch (error) {
         addSystemLog(`[ERROR] SENSOR NETWORK OFFLINE: ${error.message}`, true);
     }
@@ -134,13 +277,11 @@ function connectWebSocket() {
         const lon = data.longitude || data.location[1];
         const type = (data.simulation_type || data.target_type || "UNKNOWN").toUpperCase();
         const conf = data.confidence ? (data.confidence * 100).toFixed(1) : (Math.random() * 20 + 80).toFixed(1);
-        const intensity = data.intensity ? data.intensity.toFixed(3) : "0.850";
         
         document.getElementById("tel-type").innerText = type;
-        document.getElementById("tel-status").innerText = "TRACKING";
+        document.getElementById("tel-status").innerText = "TRACKING: INTRUDER";
         document.getElementById("tel-status").className = "data-value alert-value";
         document.getElementById("tel-conf").innerText = conf + "%";
-        document.getElementById("tel-int").innerText = intensity;
         document.getElementById("tel-coords").innerText = `[${lat.toFixed(5)}, ${lon.toFixed(5)}]`;
         document.getElementById("tel-coords").className = "data-value alert-value";
 
@@ -157,21 +298,12 @@ function connectWebSocket() {
             activeTargetMarker.setLatLng([lat, lon]);
             trackPolyline.setLatLngs(pathHistory);
         }
-
-        addSystemLog(`[!] INTRUSION DETECTED: LAT ${lat.toFixed(4)} LON ${lon.toFixed(4)}`, true);
+        addSystemLog(`[!] INTRUDER DETECTED: LAT ${lat.toFixed(4)} LON ${lon.toFixed(4)}`, true);
     };
-
     ws.onclose = function() {
         commsIndicator.className = "comms-status offline-text";
         commsIndicator.innerHTML = '<span id="comms-dot" class="status-dot offline-dot"></span> UPLINK: OFFLINE';
-        addSystemLog("[CRITICAL] WEBSOCKET UPLINK LOST", true);
     };
-}
-
-function setHoloMode(mode) {
-    if(holotableInstance) {
-        holotableInstance.setInteractionMode(mode);
-    }
 }
 
 function clearMap() {
@@ -180,17 +312,12 @@ function clearMap() {
     pathHistory = [];
     activeTargetMarker = null;
     trackPolyline = null;
-    
-    if(holotableInstance) {
-        holotableInstance.clearTrack();
-    }
+    if(holotableInstance) holotableInstance.clearTrack();
     
     document.getElementById("tel-status").innerText = "STANDBY";
     document.getElementById("tel-status").className = "data-value";
     document.getElementById("tel-coords").innerText = "NO LOCK";
     document.getElementById("tel-coords").className = "data-value";
-    
-    addSystemLog("TACTICAL OVERLAYS PURGED BY COMMAND");
 }
 
 function addSystemLog(msg, isAlert = false) {
@@ -201,5 +328,3 @@ function addSystemLog(msg, isAlert = false) {
     feedEl.insertBefore(logDiv, feedEl.firstChild); 
     if(feedEl.children.length > 30) feedEl.removeChild(feedEl.lastChild); 
 }
-
-window.onload = initMap;

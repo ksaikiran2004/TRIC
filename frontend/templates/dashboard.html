@@ -5,65 +5,159 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TRIC | Rapid Interception Command</title>
     
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="/static/css/tactical_theme.css" />
     <script>window.STATIC_URL = "/static/assets/";</script>
+
+    <style>
+        .tactical-map-filter { filter: grayscale(100%) invert(100%) contrast(150%) brightness(80%) sepia(100%) hue-rotate(130deg) saturate(300%); }
+        #holotable-canvas { width: 100%; height: 100%; min-height: 600px; background-color: #050706; position: absolute; top: 0; left: 0; z-index: 500; }
+        
+        /* AUTH & BOOT SCREEN STYLES */
+        #boot-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #050706; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #00ea4f; font-family: 'Share Tech Mono', monospace; }
+        .auth-box { border: 1px solid #00ea4f; padding: 40px; background: rgba(0,234,79,0.05); text-align: center; box-shadow: 0 0 20px rgba(0,234,79,0.2); width: 350px; }
+        .auth-input { background: transparent; border: 1px solid #384d3c; color: #fff; padding: 10px; width: 100%; margin-bottom: 15px; font-family: inherit; font-size: 1.1rem; outline: none; }
+        .auth-input:focus { border-color: #00ea4f; }
+        .btn-auth { background: #00ea4f; color: #000; font-weight: bold; padding: 10px 20px; border: none; cursor: pointer; width: 100%; font-size: 1.2rem; font-family: inherit; }
+        .btn-auth:hover { background: #fff; }
+        
+        /* DEVICE SELECTOR STYLES */
+        .device-grid { display: flex; gap: 20px; justify-content: center; margin-top: 20px; }
+        .device-card { border: 1px solid #384d3c; padding: 20px; cursor: pointer; transition: 0.3s; width: 120px; }
+        .device-card:hover { border-color: #00ea4f; background: rgba(0,234,79,0.1); }
+        .device-card svg { fill: #00ea4f; width: 50px; height: 50px; margin-bottom: 10px; }
+
+        /* THE SPLITTER (RESIZABLE PANELS) */
+        #splitter {
+            width: 6px;
+            background: #1a261c;
+            cursor: col-resize;
+            z-index: 10;
+            transition: background 0.2s;
+        }
+        #splitter:hover, #splitter.active { background: #00ea4f; }
+
+        /* DRAGGABLE & RESIZABLE UAV MODAL */
+        #uav-modal { 
+            display: none; 
+            position: absolute; 
+            top: 80px; left: 80px; /* Default spawn point */
+            width: 500px; height: 350px; 
+            min-width: 300px; min-height: 200px;
+            background: #000; border: 2px solid #ff3333; 
+            z-index: 2000; box-shadow: 0 0 30px rgba(255, 51, 51, 0.4); 
+            resize: both; overflow: hidden; /* Enables native corner resizing */
+            flex-direction: column;
+        }
+        .uav-header { 
+            background: #ff3333; color: #000; padding: 10px; font-weight: bold; 
+            display: flex; justify-content: space-between; align-items: center; 
+            cursor: move; /* Indicates it can be dragged */
+            flex-shrink: 0; user-select: none;
+        }
+        .close-btn { cursor: pointer; font-weight: bold; font-size: 1.2rem; padding: 0 10px; }
+
+        body.mobile-mode #core-layout { flex-direction: column !important; }
+        body.mobile-mode #left-column { width: 100% !important; height: 50vh !important; }
+        body.mobile-mode #sidebar { width: 100% !important; height: auto !important; border-left: none; border-top: 2px solid #00ea4f; }
+        body.mobile-mode #splitter { display: none; } /* Hide splitter on mobile */
+    </style>
 </head>
 <body>
 
-    <div id="header">
-        <div class="sys-title">TRIC // TACTICAL ORCHESTRATOR</div>
-        <div id="comms-indicator" class="comms-status offline-text">
-            <span id="comms-dot" class="status-dot offline-dot"></span> UPLINK: DISCONNECTED
+    <div id="boot-screen">
+        <div id="login-view" class="auth-box">
+            <h2 style="margin-top:0; letter-spacing: 2px;">TRIC // UPLINK</h2>
+            <p style="font-size: 0.9rem; color: #66aa99; margin-bottom: 25px;">RESTRICTED C4ISR ACCESS</p>
+            <input type="text" id="auth-id" class="auth-input" placeholder="OPERATOR ID">
+            <input type="password" id="auth-pass" class="auth-input" placeholder="PASSWORD">
+            <button class="btn-auth" onclick="verifyLogin()">INITIALIZE</button>
+            <div id="login-err" style="color: #ff3333; margin-top: 15px; font-size: 0.9rem; display: none;">ACCESS DENIED.</div>
+        </div>
+
+        <div id="device-view" class="auth-box" style="display: none; width: 400px;">
+            <h2 style="margin-top:0;">SELECT DEPLOYMENT NODE</h2>
+            <div class="device-grid">
+                <div class="device-card" onclick="bootSystem('desktop')">
+                    <svg viewBox="0 0 24 24"><path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z"/></svg>
+                    <div>COMMAND<br>(DESKTOP)</div>
+                </div>
+                <div class="device-card" onclick="bootSystem('mobile')">
+                    <svg viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+                    <div>FIELD APP<br>(MOBILE)</div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div id="core-layout">
-        <div id="left-column">
-            <div id="map-container">
-                <div id="map"></div>
-                <div class="map-overlay-scanline"></div>
+    <div id="main-dashboard" style="display: none; height: 100vh; flex-direction: column;">
+        <div id="header">
+            <div class="sys-title">TRIC // TACTICAL ORCHESTRATOR</div>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <button onclick="toggleUAV()" style="background: transparent; border: 1px solid #ff3333; color: #ff3333; padding: 5px 15px; font-family: inherit; font-weight: bold; cursor: pointer;">[ 🔴 UAV FEED ]</button>
+                <div id="comms-indicator" class="comms-status offline-text">
+                    <span id="comms-dot" class="status-dot offline-dot"></span> UPLINK: DISCONNECTED
+                </div>
+            </div>
+        </div>
+
+        <div id="core-layout" style="display: flex; flex: 1; overflow: hidden;">
+            <div id="left-column" style="flex: 1; position: relative; overflow: hidden;">
+                <div id="map" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></div>
+                <div id="holotable-canvas" style="display: none;"></div>
                 
-                <button id="topo-trigger-btn" style="display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(0, 0, 0, 0.85); border: 1px solid #00ea4f; color: #00ea4f; padding: 12px 24px; font-family: inherit; font-size: 1rem; font-weight: bold; cursor: pointer; letter-spacing: 2px; box-shadow: 0 0 15px rgba(0, 234, 79, 0.4);">
-                    [!] TACTICAL RANGE REACHED: INITIALIZE 3D TOPOGRAPHY
+                <button id="topo-trigger-btn" style="display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(0, 0, 0, 0.85); border: 1px solid #00ea4f; color: #00ea4f; padding: 12px 24px; font-family: inherit; font-weight: bold; cursor: pointer;">
+                    [!] INITIALIZE 3D TOPOGRAPHY
                 </button>
-            </div>
-            
-            <div id="video-container" class="panel">
-                <div class="video-overlay-text">🔴 LIVE UAV FEED // FLIR-07</div>
-                <img id="drone-feed" src="/api/video_feed" alt="AWAITING VIDEO STREAM...">
-            </div>
-        </div>
-        
-        <div id="sidebar">
-            <div class="panel">
-                <div class="panel-title">LIVE TELEMETRY // <span id="tel-type">AWAITING DATA</span></div>
-                <div class="telemetry-grid">
-                    <div><div class="data-label">STATUS</div><div id="tel-status" class="data-value" style="color: #66aa99;">STANDBY</div></div>
-                    <div><div class="data-label">CONFIDENCE</div><div id="tel-conf" class="data-value">--%</div></div>
-                    <div><div class="data-label">INTENSITY</div><div id="tel-int" class="data-value">--</div></div>
-                    <div><div class="data-label">LATENCY</div><div id="tel-lat" class="data-value">-- ms</div></div>
-                </div>
-                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px dotted #384d3c;">
-                    <div class="data-label">TARGET COORDINATES</div>
-                    <div id="tel-coords" class="data-value" style="font-size: 1.2rem;">NO LOCK</div>
-                </div>
-            </div>
 
-            <div id="mission-feed">
-                <div class="panel-title">MISSION FEED</div>
+                <div id="altimeter-hud" style="display: none; position: absolute; right: 20px; top: 50%; transform: translateY(-50%); color: #00ea4f; font-family: 'Share Tech Mono', monospace; text-align: right; pointer-events: none; z-index: 1000; text-shadow: 0 0 5px #00ea4f;">
+                    <div style="border-right: 2px solid #00ea4f; padding-right: 15px;">
+                        <span id="alt-val" style="font-size: 2.5rem; font-weight: bold;">--</span><br>
+                        <span style="letter-spacing: 2px; opacity: 0.8;">ALTITUDE (m)</span>
+                    </div>
+                </div>
+
+                <div id="holotable-controls" style="display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
+                    <button class="btn-primary" id="return-2d-btn" style="background: rgba(0,0,0,0.8); border: 1px solid #ff3333; color: #ff3333; padding: 10px 20px;">COLLAPSE 3D MESH</button>
+                </div>
             </div>
             
-            <div style="padding-top: 10px;">
-                <button class="btn-primary" onclick="clearMap()" style="width: 100%;">PURGE TRACKS</button>
+            <div id="splitter"></div>
+
+            <div id="sidebar" style="width: 350px; min-width: 250px; max-width: 800px; background: #050706; padding: 20px; overflow-y: auto; display: flex; flex-direction: column;">
+                <div class="panel">
+                    <div class="panel-title">LIVE TELEMETRY</div>
+                    <div class="telemetry-grid">
+                        <div><div class="data-label">STATUS</div><div id="tel-status" class="data-value" style="color: #66aa99;">STANDBY</div></div>
+                        <div><div class="data-label">CONFIDENCE</div><div id="tel-conf" class="data-value">--%</div></div>
+                    </div>
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px dotted #384d3c;">
+                        <div class="data-label">TARGET COORDINATES</div>
+                        <div id="tel-coords" class="data-value" style="font-size: 1.2rem;">NO LOCK</div>
+                    </div>
+                </div>
+
+                <div id="mission-feed" style="flex: 1; overflow-y: auto;">
+                    <div class="panel-title">MISSION FEED</div>
+                </div>
+                <div style="padding-top: 10px; flex-shrink: 0;">
+                    <button class="btn-primary" onclick="clearMap()" style="width: 100%;">PURGE TRACKS</button>
+                </div>
             </div>
         </div>
     </div>
 
+    <div id="uav-modal">
+        <div class="uav-header">
+            <span>🔴 LIVE UAV OPTICAL FEED // FLIR-07</span>
+            <span class="close-btn" onclick="toggleUAV()">X</span>
+        </div>
+        <img id="drone-feed" src="/api/video_feed" alt="AWAITING VIDEO STREAM..." style="width: 100%; height: 100%; object-fit: cover; flex-grow: 1; background: #111;">
+    </div>
+
+    <script src="/static/js/three.min.js"></script>
+    <script src="/static/js/holotable.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/static/js/map_loader.js"></script>
 </body>
