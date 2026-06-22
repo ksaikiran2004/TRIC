@@ -122,10 +122,14 @@ let holotableInstance = null;
 let is3DModeActive = false;
 
 // REALISTIC JAGGED BORDER (Simulated Kashmir LoC)
+// REALISTIC JAGGED BORDER (India-Pakistan LoC: Keran to Naushera)
 const LOC_COORDS = [
-    [34.40, 73.80], [34.37, 73.83], [34.38, 73.88],
-    [34.32, 73.94], [34.29, 74.02], [34.24, 74.08],
-    [34.22, 74.15], [34.16, 74.22]
+    [34.80, 73.90], // Far North
+    [34.50, 73.85], // Tangdhar Sector
+    [34.15, 74.05], // Uri Sector
+    [33.80, 74.00], // Poonch Sector
+    [33.50, 74.15], // Rajouri Sector
+    [33.20, 74.30]  // Naushera Sector
 ];
 
 const createTacticalIcon = (color, label, isRadar = false) => {
@@ -154,8 +158,11 @@ function drawTacticalBorder() {
     L.polyline(LOC_COORDS, { color: '#ffffff', weight: 2, opacity: 0.9, dashArray: '15, 10' }).addTo(map);
 }
 
+// ... (keep your existing bootSystem, initSplitter, etc. at the top) ...
+
 function initMap() {
-    map = L.map('map').setView([34.28, 74.00], 10); 
+    // 1. START FROM ORBIT: Set view high up over South Asia (Zoom Level 5)
+    map = L.map('map').setView([22.00, 78.00], 5); 
     
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 18,
@@ -178,6 +185,7 @@ function initMap() {
     map.on('moveend', function() {
         if(is3DModeActive) return;
         let currentZoom = map.getZoom();
+        // Only show the 3D trigger when we dive close enough to the mountains
         if (currentZoom >= 10) {
             topoBtn.style.display = 'block';
         } else {
@@ -215,8 +223,6 @@ function initMap() {
         document.getElementById('map').style.display = 'block';
         map.invalidateSize();
     });
-
-    setTimeout(() => { map.invalidateSize(); }, 500);
 }
 
 async function loadDeployedSensors() {
@@ -268,13 +274,19 @@ async function loadDeployedSensors() {
         }
 
         deploymentBounds = [ [Math.min(...lats) - 0.02, Math.min(...lons) - 0.02], [Math.max(...lats) + 0.02, Math.max(...lons) + 0.02] ];
-        map.fitBounds(deploymentBounds);
-        addSystemLog(`[SUCCESS] 3-TIER GRID DEPLOYED ALONG LoC.`, false);
+        
+        // 2. THE TACTICAL DIVE: Wait 800ms after the map boots, then violently zoom in to the sector over 4 seconds.
+        addSystemLog(`[SUCCESS] 3-TIER GRID DEPLOYED. EXECUTING TACTICAL DIVE...`, false);
+        setTimeout(() => {
+            map.flyToBounds(deploymentBounds, { padding: [50, 50], duration: 4.0, easeLinearity: 0.25 });
+        }, 800);
         
     } catch (error) {
         addSystemLog(`[ERROR] SENSOR NETWORK OFFLINE: ${error.message}`, true);
     }
 }
+
+// ... (keep your existing connectWebSocket and other functions below) ...
 
 function connectWebSocket() {
     const ws = new WebSocket("ws://localhost:8000/ws/tactical");

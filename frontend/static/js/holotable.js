@@ -298,12 +298,13 @@ class TacticalHolotable {
             const deltaY = e.clientY - this.previousMousePosition.y;
 
             if (e.buttons === 1 && !e.shiftKey) { 
-                // Left Click: Rotate
+                // Left Click: Rotate the map
                 this.scene.rotation.y += deltaX * 0.005;
-            } else if (e.buttons === 2 || e.shiftKey) { 
-                // Right Click or Shift+Left Click: Pan flat across the ground
-                this.camera.position.x -= deltaX * 0.5;
-                this.camera.position.z -= deltaY * 0.5; // CRITICAL: Move Z instead of Y
+            } else if (e.buttons === 2 || e.buttons === 4 || e.shiftKey) { 
+                // Right Click, Middle Click, or Shift+Left Click: Pan across the ground
+                // Increased multiplier to 1.5 for faster, smoother panning
+                this.camera.position.x -= deltaX * 1.5;
+                this.camera.position.z -= deltaY * 1.5; 
             }
             this.previousMousePosition = { x: e.clientX, y: e.clientY };
         });
@@ -317,6 +318,7 @@ class TacticalHolotable {
             this.camera.position.y += zoomDir * 5; 
             
             this.camera.position.y = Math.max(5, Math.min(this.camera.position.y, 500));
+            // CRITICAL FIX: Removed camera.lookAt(0,0,0) so it doesn't snap back to center when you zoom!
         });
 
         this.container.addEventListener('contextmenu', e => e.preventDefault());
