@@ -297,13 +297,13 @@ class TacticalHolotable {
             const deltaX = e.clientX - this.previousMousePosition.x;
             const deltaY = e.clientY - this.previousMousePosition.y;
 
-            if (e.buttons === 1) { 
+            if (e.buttons === 1 && !e.shiftKey) { 
                 // Left Click: Rotate
                 this.scene.rotation.y += deltaX * 0.005;
             } else if (e.buttons === 2 || e.shiftKey) { 
-                // Right Click or Shift+Left Click: Pan/Drag
-                this.camera.translateX(-deltaX * 0.2);
-                this.camera.translateY(deltaY * 0.2);
+                // Right Click or Shift+Left Click: Pan flat across the ground
+                this.camera.position.x -= deltaX * 0.5;
+                this.camera.position.z -= deltaY * 0.5; // CRITICAL: Move Z instead of Y
             }
             this.previousMousePosition = { x: e.clientX, y: e.clientY };
         });

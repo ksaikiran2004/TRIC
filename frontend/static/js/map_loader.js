@@ -20,21 +20,26 @@ function bootSystem(mode) {
         document.body.classList.add('mobile-mode');
     }
     
+    // Give the DOM 250ms to paint the new Flexbox layout before booting Leaflet
     setTimeout(() => {
         initMap();
         initSplitter(); // Start the dynamic layout resizer
         initUAVDrag();  // Enable drone window dragging
-        setTimeout(() => { if (map) map.invalidateSize(); }, 150);
+        
+        // Failsafe: Force Leaflet to recalculate its grid to prevent the black void
+        setTimeout(() => { 
+            if (map) map.invalidateSize(); 
+        }, 150);
     }, 250);
 }
 
 // ==========================================
-// UI INTERACTION CONTROLLERS
+// UI INTERACTION CONTROLLERS (DRAG & RESIZE)
 // ==========================================
 function toggleUAV() {
     const modal = document.getElementById('uav-modal');
     if (modal.style.display === 'none' || modal.style.display === '') {
-        modal.style.display = 'flex'; // Flex is required so the image stretches
+        modal.style.display = 'flex';
     } else {
         modal.style.display = 'none';
     }
@@ -43,25 +48,24 @@ function toggleUAV() {
 function initSplitter() {
     const splitter = document.getElementById('splitter');
     const sidebar = document.getElementById('sidebar');
+    if (!splitter || !sidebar) return; 
+
     let isResizing = false;
 
     splitter.addEventListener('mousedown', (e) => {
         isResizing = true;
         splitter.classList.add('active');
-        document.body.style.cursor = 'col-resize';
+        document.body.classList.add('is-resizing'); 
+        e.preventDefault(); // STOPS TEXT HIGHLIGHTING FREEZE
     });
 
     document.addEventListener('mousemove', (e) => {
         if (!isResizing) return;
+        e.preventDefault();
         
-        // Calculate new sidebar width
         let newWidth = window.innerWidth - e.clientX;
         if (newWidth >= 250 && newWidth <= 800) {
             sidebar.style.width = newWidth + 'px';
-            
-            // Aggressively resize maps to prevent tearing
-            if (map && !is3DModeActive) map.invalidateSize();
-            if (holotableInstance && is3DModeActive) holotableInstance.resize();
         }
     });
 
@@ -69,7 +73,13 @@ function initSplitter() {
         if (isResizing) {
             isResizing = false;
             splitter.classList.remove('active');
-            document.body.style.cursor = 'default';
+            document.body.classList.remove('is-resizing');
+            
+            // Send a global shockwave to force all map engines to snap to the new size
+            window.dispatchEvent(new Event('resize'));
+            
+            if (map && !is3DModeActive) map.invalidateSize();
+            if (holotableInstance && is3DModeActive) holotableInstance.resize();
         }
     });
 }
@@ -77,6 +87,8 @@ function initSplitter() {
 function initUAVDrag() {
     const modal = document.getElementById('uav-modal');
     const header = modal.querySelector('.uav-header');
+    if (!modal || !header) return;
+
     let isDragging = false;
     let offsetX = 0, offsetY = 0;
 
@@ -96,7 +108,7 @@ function initUAVDrag() {
 }
 
 // ==========================================
-// MAP & HOLOTABLE LOGIC
+// MAP & SENSOR LOGIC
 // ==========================================
 let map, sensorLayer;
 let activeTargetMarker = null;
@@ -109,6 +121,7 @@ const feedEl = document.getElementById('mission-feed');
 let holotableInstance = null;
 let is3DModeActive = false;
 
+// REALISTIC JAGGED BORDER (Simulated Kashmir LoC)
 const LOC_COORDS = [
     [34.40, 73.80], [34.37, 73.83], [34.38, 73.88],
     [34.32, 73.94], [34.29, 74.02], [34.24, 74.08],
@@ -202,6 +215,8 @@ function initMap() {
         document.getElementById('map').style.display = 'block';
         map.invalidateSize();
     });
+
+    setTimeout(() => { map.invalidateSize(); }, 500);
 }
 
 async function loadDeployedSensors() {
