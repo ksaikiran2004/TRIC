@@ -3,94 +3,272 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TRIC | Rapid Interception Command</title>
+    <title>Trinetra Rapid Interception Command</title>
     
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="/static/css/tactical_theme.css" />
     <script>window.STATIC_URL = "/static/assets/";</script>
 
     <style>
-        .tactical-map-filter { filter: grayscale(100%) invert(100%) contrast(150%) brightness(80%) sepia(100%) hue-rotate(130deg) saturate(300%); }
-        #holotable-canvas { width: 100%; height: 100%; min-height: 600px; background-color: #050706; position: absolute; top: 0; left: 0; z-index: 500; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #050706;
+            color: #00ea4f;
+            font-family: 'Share Tech Mono', monospace;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* RESTORED DEFENSE THEME: High contrast night-vision satellite */
+        .tactical-map-filter { 
+            filter: grayscale(100%) invert(100%) contrast(160%) brightness(80%) sepia(100%) hue-rotate(130deg) saturate(300%); 
+        }
         
-        /* =========================================
-           TACTICAL BOOT SCREEN (TEXTURE & GRAPHICS)
-           ========================================= */
+        .tactical-labels-filter { 
+            filter: invert(100%) hue-rotate(150deg) brightness(200%) contrast(250%); 
+        }
+        
+        #holotable-canvas { 
+            width: 100%; 
+            height: 100%; 
+            background-color: #050706; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            z-index: 500; 
+        }
+
         #boot-screen { 
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; 
-            display: flex; flex-direction: column; align-items: center; justify-content: center; 
-            color: #00ea4f; font-family: 'Share Tech Mono', monospace;
-            /* Tactical Grid Background */
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100vw; 
+            height: 100vh; 
+            z-index: 9999; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
             background-color: #050706;
             background-image: 
-                linear-gradient(rgba(0, 234, 79, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 234, 79, 0.05) 1px, transparent 1px);
-            background-size: 40px 40px;
+                linear-gradient(rgba(0, 234, 79, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 234, 79, 0.04) 1px, transparent 1px);
+            background-size: 50px 50px;
         }
         
-        /* Glassmorphism Hardware Panel */
         .auth-box { 
-            background: linear-gradient(135deg, rgba(10, 26, 18, 0.85), rgba(5, 7, 6, 0.95));
-            border: 1px solid #1f3325; border-top: 3px solid #00ea4f;
-            padding: 40px; text-align: center; width: 350px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,234,79,0.05);
-            backdrop-filter: blur(10px);
+            background: linear-gradient(135deg, rgba(12, 32, 22, 0.9), rgba(4, 8, 6, 0.98));
+            border: 1px solid #1c3823; 
+            border-top: 4px solid #00ea4f;
+            padding: 45px; 
+            text-align: center; 
+            width: 420px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.9), inset 0 0 30px rgba(0, 234, 79, 0.05);
+            backdrop-filter: blur(12px);
+            border-radius: 4px;
         }
 
-        /* Recessed Terminal Inputs */
         .auth-input { 
-            background: rgba(0, 0, 0, 0.6); 
-            border: 1px solid #2a4030; color: #00ea4f; 
-            padding: 12px; width: 100%; margin-bottom: 15px; 
-            font-family: inherit; font-size: 1.1rem; outline: none;
-            box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
-            transition: all 0.3s ease;
+            background: rgba(0, 0, 0, 0.75); 
+            border: 1px solid #2d4a36; 
+            color: #00ea4f; 
+            padding: 14px; 
+            width: 100%; 
+            margin-bottom: 20px; 
+            font-family: inherit; 
+            font-size: 1.15rem; 
+            outline: none;
+            box-shadow: inset 0 3px 10px rgba(0,0,0,0.9);
+            box-sizing: border-box;
+            transition: all 0.25s ease;
         }
-        .auth-input:focus { border-color: #00ea4f; box-shadow: inset 0 0 10px rgba(0,234,79,0.2), 0 0 10px rgba(0,234,79,0.3); }
-        
-        /* Metallic Hardware Button */
-        .btn-auth { 
-            background: linear-gradient(to bottom, #00ea4f, #00b33c);
-            color: #050706; font-weight: bold; padding: 12px 20px; 
-            border: 1px solid #b3ffcc; cursor: pointer; width: 100%; 
-            font-size: 1.2rem; font-family: inherit; text-transform: uppercase;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 5px 15px rgba(0,234,79,0.3);
-            text-shadow: 0 1px 1px rgba(255,255,255,0.4);
-            transition: all 0.2s;
+
+        .auth-input:focus { 
+            border-color: #00ea4f; 
+            box-shadow: inset 0 0 15px rgba(0,234,79,0.2), 0 0 12px rgba(0,234,79,0.3); 
         }
-        .btn-auth:hover { background: linear-gradient(to bottom, #1aff66, #00ea4f); transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 8px 20px rgba(0,234,79,0.5); }
-        .btn-auth:active { transform: translateY(2px); box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); }
-        
-        /* Animated Radar Logo */
-        .radar-logo { width: 80px; height: 80px; margin: 0 auto 20px auto; }
-        .spin-slow { animation: spin 4s linear infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
 
-        /* Textured Device Cards */
-        .device-grid { display: flex; gap: 20px; justify-content: center; margin-top: 20px; }
-        .device-card { 
-            background: linear-gradient(135deg, rgba(20, 30, 20, 0.8), rgba(5, 7, 6, 0.9));
-            border: 1px solid #384d3c; padding: 25px 15px; cursor: pointer; transition: 0.3s; width: 130px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        .btn-primary {
+            background: linear-gradient(to bottom, #16261c, #08120a);
+            border: 1px solid #00ea4f;
+            color: #00ea4f;
+            padding: 14px 28px;
+            font-family: 'Share Tech Mono', monospace; 
+            font-size: 1.1rem; 
+            font-weight: bold;
+            cursor: pointer; 
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 5px 0 #00551c, 0 8px 20px rgba(0, 234, 79, 0.25);
+            border-radius: 4px; 
+            transition: transform 0.05s ease, box-shadow 0.05s ease;
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 12px;
         }
-        .device-card:hover { border-color: #00ea4f; box-shadow: 0 5px 20px rgba(0,234,79,0.3), inset 0 0 15px rgba(0,234,79,0.1); transform: translateY(-5px); }
-        .device-card svg { fill: #00ea4f; width: 50px; height: 50px; margin-bottom: 15px; filter: drop-shadow(0 0 5px rgba(0,234,79,0.5)); }
 
-        /* =========================================
-           SPLITTER & RESIZING FIXES
-           ========================================= */
-        #splitter { width: 6px; background: #1a261c; cursor: col-resize; z-index: 10; transition: background 0.2s; position: relative; }
-        #splitter::after { content: ''; position: absolute; left: -8px; right: -8px; top: 0; bottom: 0; cursor: col-resize; } /* Invisible wider hit-box */
-        #splitter:hover, #splitter.active { background: #00ea4f; box-shadow: 0 0 10px #00ea4f; }
+        .btn-primary:hover { 
+            background: linear-gradient(to bottom, #203d2b, #08120a);
+            text-shadow: 0 0 8px #00ea4f;
+        }
 
-        /* CRITICAL: Disables map events while resizing so it doesn't stutter/stop */
+        .btn-primary:active {
+            transform: translateY(5px); 
+            box-shadow: 0 0 0 #00551c, 0 2px 5px rgba(0, 234, 79, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(to bottom, #330d0d, #140303); 
+            border: 1px solid #ff3333; 
+            color: #ff3333;
+            box-shadow: 0 5px 0 #660000, 0 8px 20px rgba(255, 51, 51, 0.25);
+        }
+
+        .btn-danger:hover {
+            background: linear-gradient(to bottom, #4a1212, #140303); 
+            text-shadow: 0 0 8px #ff3333;
+        }
+
+        .btn-danger:active { 
+            transform: translateY(5px); 
+            box-shadow: 0 0 0 #660000, 0 2px 5px rgba(255, 51, 51, 0.4); 
+        }
+
+        .hologram-label {
+            background: transparent !important; 
+            border: none !important; 
+            box-shadow: none !important;
+            color: #ffffff; 
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 1.1rem; 
+            font-weight: bold; 
+            letter-spacing: 2px;
+            text-shadow: 1px 1px 2px #000, -1px -1px 2px #000;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .region-label { 
+            font-size: 2.5rem; 
+            color: rgba(255, 255, 255, 0.6) !important; 
+            letter-spacing: 10px; 
+            z-index: 0 !important; 
+        }
+
+        .custom-reticle { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .reticle-icon { position: relative; width: 24px; height: 24px; }
+        .reticle-icon::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid currentColor; border-radius: 50%; animation: radarPulse 2s infinite linear; }
+        .reticle-icon::after { content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: currentColor; transform: translate(-50%, -50%); border-radius: 50%; }
+        .reticle-crosshair { position: absolute; top: 50%; left: 50%; width: 140%; height: 100%; transform: translate(-50%, -50%); }
+        .reticle-crosshair::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: currentColor; opacity: 0.6; }
+        .reticle-crosshair::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: currentColor; opacity: 0.6; }
+        @keyframes radarPulse { 0% { transform: scale(0.4); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+
+        .reticle-label {
+            font-family: 'Share Tech Mono', monospace; 
+            font-size: 10px; 
+            font-weight: bold; 
+            background: #000; 
+            color: currentColor;
+            padding: 2px 4px; 
+            border: 1px solid currentColor;
+            border-radius: 2px;
+            margin-top: 4px;
+            letter-spacing: 1px;
+        }
+
+        .panel {
+            background: linear-gradient(135deg, rgba(8, 20, 13, 0.92), rgba(4, 7, 5, 0.98));
+            border: 1px solid #1b3622; 
+            border-top: 4px solid #00ea4f;
+            box-shadow: inset 0 0 25px rgba(0, 234, 79, 0.04), 0 12px 24px rgba(0,0,0,0.85); 
+            margin-bottom: 20px;
+            border-radius: 3px;
+        }
+
+        .panel-title {
+            background: rgba(0, 234, 79, 0.12); 
+            padding: 14px; 
+            border-bottom: 1px solid #1b3622;
+            display: flex; 
+            align-items: center; 
+            gap: 12px; 
+            font-size: 1.15rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-shadow: 0 0 6px #00ea4f;
+        }
+
+        .map-overlay-scanline {
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 4; 
+            background-size: 100% 4px, 6px 100%; 
+            pointer-events: none; 
+            opacity: 0.4;
+        }
+
+        #splitter { 
+            width: 8px; 
+            background: #1a261c; 
+            cursor: col-resize; 
+            z-index: 10; 
+            transition: background 0.2s; 
+            position: relative; 
+            border-left: 1px solid #000; 
+            border-right: 1px solid #000;
+        }
+
+        #splitter:hover, #splitter.active { 
+            background: #00ea4f; 
+            box-shadow: 0 0 15px #00ea4f; 
+        }
+
         body.is-resizing { cursor: col-resize !important; user-select: none; }
         body.is-resizing #map, body.is-resizing #holotable-canvas { pointer-events: none !important; }
 
-        #uav-modal { display: none; position: absolute; top: 80px; left: 80px; width: 500px; height: 350px; min-width: 300px; min-height: 200px; background: #000; border: 2px solid #ff3333; z-index: 2000; box-shadow: 0 0 30px rgba(255, 51, 51, 0.4); resize: both; overflow: hidden; flex-direction: column; }
-        .uav-header { background: linear-gradient(90deg, #ff3333, #990000); color: #fff; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; cursor: move; flex-shrink: 0; user-select: none; text-shadow: 0 1px 2px #000; }
-        .close-btn { cursor: pointer; font-weight: bold; font-size: 1.2rem; padding: 0 10px; }
+        #uav-modal { 
+            display: none; 
+            position: absolute; 
+            top: 100px; 
+            left: 100px; 
+            width: 580px; 
+            height: 420px; 
+            background: #000; 
+            border: 2px solid #ff3333; 
+            z-index: 2000; 
+            box-shadow: 0 0 45px rgba(255, 51, 51, 0.45); 
+            resize: both; 
+            overflow: hidden; 
+            flex-direction: column; 
+            border-radius: 4px; 
+        }
+
+        .uav-header { 
+            background: linear-gradient(90deg, #ff3333, #8a0303); 
+            color: #fff; 
+            padding: 12px; 
+            font-weight: bold; 
+            display: flex; 
+            justify-content: space-between; 
+            cursor: move; 
+            user-select: none; 
+            letter-spacing: 2px;
+            text-shadow: 0 1px 3px #000;
+        }
 
         body.mobile-mode #core-layout { flex-direction: column !important; }
         body.mobile-mode #left-column { width: 100% !important; height: 50vh !important; }
@@ -101,91 +279,130 @@
 <body>
 
     <div id="boot-screen">
-        <div id="login-view" class="auth-box">
-            <div class="radar-logo">
-                <svg viewBox="0 0 100 100" class="spin-slow">
-                    <circle cx="50" cy="50" r="48" stroke="#00ea4f" stroke-width="1.5" fill="none" opacity="0.6"/>
-                    <circle cx="50" cy="50" r="30" stroke="#00ea4f" stroke-width="1" fill="none" opacity="0.3"/>
-                    <line x1="50" y1="2" x2="50" y2="98" stroke="#00ea4f" stroke-width="1" opacity="0.5"/>
-                    <line x1="2" y1="50" x2="98" y2="50" stroke="#00ea4f" stroke-width="1" opacity="0.5"/>
-                    <path d="M50,50 L50,2 A48,48 0 0,1 98,50 Z" fill="rgba(0,234,79,0.3)"/>
-                </svg>
-            </div>
-            <h2 style="margin-top:0; letter-spacing: 3px; text-shadow: 0 0 10px #00ea4f;">TRIC // UPLINK</h2>
-            <p style="font-size: 0.9rem; color: #66aa99; margin-bottom: 25px; border-bottom: 1px dotted #384d3c; padding-bottom: 15px;">RESTRICTED C4ISR SECURE GATEWAY</p>
+        <div id="login-view" class="auth-box panel">
+            <svg width="75" height="70" viewBox="0 0 24 24" fill="none" stroke="#00ea4f" stroke-width="1.5" style="margin-bottom: 25px; filter: drop-shadow(0 0 5px #00ea4f);">
+                <circle cx="12" cy="12" r="10" stroke-dasharray="3 3" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="1.5" fill="#00ea4f" />
+                <path d="M12 2 L12 22 M2 12 L22 12" opacity="0.4" />
+            </svg>
+            <h1 style="margin-top:0; letter-spacing: 6px; text-shadow: 0 0 12px #00ea4f; font-size: 2.3rem;">TRINETRA SYSTEM</h1>
+            <p style="font-size: 0.95rem; color: #66aa99; margin-bottom: 35px; border-bottom: 1px solid #1c3823; padding-bottom: 20px;">RESTRICTED AIR-DEFENSE UPLINK</p>
+            
             <input type="text" id="auth-id" class="auth-input" placeholder="> OPERATOR_ID">
-            <input type="password" id="auth-pass" class="auth-input" placeholder="> PASSWORD">
-            <button class="btn-auth" onclick="verifyLogin()">INITIALIZE CONNECTION</button>
-            <div id="login-err" style="color: #ff3333; margin-top: 15px; font-size: 0.9rem; display: none; font-weight: bold; background: rgba(255,0,0,0.1); padding: 5px; border: 1px solid #ff3333;">[!] ACCESS DENIED: INVALID CREDENTIALS</div>
+            <input type="password" id="auth-pass" class="auth-input" placeholder="> CONNECTION_KEY">
+            
+            <button id="init-btn" class="btn-primary" style="width: 100%; margin-top: 5px;" onclick="verifyLogin()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;"><path d="M12 11c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6-4h-1V5c0-2.76-2.24-5-6-5S5 2.24 5 5v2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm1-5H7V5c0-1.66 1.34-3 4-3s4 1.34 4 3v2z"/></svg>
+                AUTHENTICATE UPLINK
+            </button>
+            <div id="login-err" style="color: #ff3333; margin-top: 20px; display: none; border: 1px solid #ff3333; padding: 12px; background: rgba(255,0,0,0.08); font-weight: bold; font-size: 0.9rem;">[!] ACCESS CRITICAL FAILURE</div>
         </div>
 
-        <div id="device-view" class="auth-box" style="display: none; width: 450px;">
-            <h2 style="margin-top:0;">ESTABLISH DEPLOYMENT NODE</h2>
-            <div class="device-grid">
-                <div class="device-card" onclick="bootSystem('desktop')">
-                    <svg viewBox="0 0 24 24"><path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z"/></svg>
-                    <div>COMMAND<br><span style="font-size: 0.8em; color: #888;">(DESKTOP)</span></div>
-                </div>
-                <div class="device-card" onclick="bootSystem('mobile')">
-                    <svg viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
-                    <div>FIELD APP<br><span style="font-size: 0.8em; color: #888;">(MOBILE)</span></div>
-                </div>
+        <div id="device-view" class="auth-box panel" style="display: none; width: 560px;">
+            <h2 style="margin-top:0; letter-spacing: 4px; text-shadow: 0 0 8px #00ea4f;">ESTABLISH HARDWARE NODE</h2>
+            <div style="display: flex; gap: 25px; justify-content: center; margin-top: 35px; margin-bottom: 15px;">
+                <button class="btn-primary" style="flex-direction: column; padding: 35px 25px; height: auto; min-width: 180px;" onclick="bootSystem('desktop')">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" style="margin-bottom: 12px;"><path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z"/></svg>
+                    <span>C2 DIVISION<br><small style="color:#66aa99; font-size: 0.75rem; letter-spacing: 1px;">(DESKTOP INTERFACE)</small></span>
+                </button>
+                <button class="btn-primary" style="flex-direction: column; padding: 35px 25px; height: auto; min-width: 180px;" onclick="bootSystem('mobile')">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" style="margin-bottom: 12px;"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+                    <span>FIELD LINK<br><small style="color:#66aa99; font-size: 0.75rem; letter-spacing: 1px;">(MOBILE RESPONSE)</small></span>
+                </button>
             </div>
         </div>
     </div>
 
     <div id="main-dashboard" style="display: none; height: 100vh; flex-direction: column;">
-        <div id="header">
-            <div class="sys-title">TRIC // TACTICAL ORCHESTRATOR</div>
-            <div style="display: flex; gap: 20px; align-items: center;">
-                <button onclick="toggleUAV()" style="background: transparent; border: 1px solid #ff3333; color: #ff3333; padding: 5px 15px; font-family: inherit; font-weight: bold; cursor: pointer;">[ 🔴 UAV FEED ]</button>
-                <div id="comms-indicator" class="comms-status offline-text">
-                    <span id="comms-dot" class="status-dot offline-dot"></span> UPLINK: DISCONNECTED
+        <div id="header" style="display: flex; justify-content: space-between; padding: 16px 30px; background: #040805; border-bottom: 3px solid #00ea4f; box-shadow: 0 6px 25px rgba(0,0,0,0.95); z-index: 10;">
+            <div class="sys-title" style="font-size: 1.65rem; font-weight: bold; color: #00ea4f; text-shadow: 0 0 10px #00ea4f; display: flex; align-items: center; gap: 16px;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00ea4f" stroke-width="2" style="filter: drop-shadow(0 0 3px #00ea4f);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                TRINETRA // COMMAND MATRIX
+            </div>
+            <div style="display: flex; gap: 25px; align-items: center;">
+                <button class="btn-primary btn-danger" onclick="toggleUAV()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+                        <path d="M9.5 7.5A2.5 2.5 0 0 1 12 5a2.5 2.5 0 0 1 2.5 2.5V9H19a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-4.5v1.5a2.5 2.5 0 0 1-2.5 2.5 2.5 2.5 0 0 1-2.5-2.5V15H5a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h4.5V7.5z M12 7a.5.5 0 0 0-.5.5V11H7a.5.5 0 0 0 0 1h4.5v3.5a.5.5 0 0 0 1 0V12H17a.5.5 0 0 0 0-1h-4.5V7.5A.5.5 0 0 0 12 7z" />
+                        <circle cx="5" cy="5" r="2" />
+                        <circle cx="19" cy="5" r="2" />
+                        <circle cx="5" cy="19" r="2" />
+                        <circle cx="19" cy="19" r="2" />
+                    </svg>
+                    UAV FEED PROTOCOL
+                </button>
+                <div style="color: #00ea4f; font-weight: bold; font-size: 1.15rem; display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 10px; height: 10px; background: #00ea4f; border-radius: 50%; box-shadow: 0 0 12px #00ea4f; animation: radarPulse 1.2s infinite steps(8);"></div>
+                    SECURE SATELLITE COMMS
                 </div>
             </div>
         </div>
 
-        <div id="core-layout" style="display: flex; flex: 1; overflow: hidden;">
-            <div id="left-column" style="flex: 1; position: relative; overflow: hidden;">
+        <div id="core-layout" style="display: flex; flex: 1; overflow: hidden; width: 100%;">
+            
+            <div id="left-column" style="flex: 1; position: relative; overflow: hidden; min-width: 300px;">
                 <div id="map" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></div>
                 <div id="holotable-canvas" style="display: none;"></div>
+                <div class="map-overlay-scanline"></div>
                 
-                <button id="topo-trigger-btn" style="display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(0, 0, 0, 0.85); border: 1px solid #00ea4f; color: #00ea4f; padding: 12px 24px; font-family: inherit; font-weight: bold; cursor: pointer;">
-                    [!] INITIALIZE 3D TOPOGRAPHY
+                <button id="topo-trigger-btn" class="btn-primary" style="display: none; position: absolute; top: 25px; left: 50%; transform: translateX(-50%); z-index: 1000; background: #040805;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>
+                    ENGAGE 3D SECTOR TOPOGRAPHY
                 </button>
 
-                <div id="altimeter-hud" style="display: none; position: absolute; right: 20px; top: 50%; transform: translateY(-50%); color: #00ea4f; font-family: 'Share Tech Mono', monospace; text-align: right; pointer-events: none; z-index: 1000; text-shadow: 0 0 5px #00ea4f;">
-                    <div style="border-right: 2px solid #00ea4f; padding-right: 15px;">
-                        <span id="alt-val" style="font-size: 2.5rem; font-weight: bold;">--</span><br>
-                        <span style="letter-spacing: 2px; opacity: 0.8;">ALTITUDE (m)</span>
+                <div id="altimeter-hud" style="display: none; position: absolute; right: 35px; top: 50%; transform: translateY(-50%); color: #00ea4f; text-align: right; z-index: 1000; text-shadow: 0 0 10px #00ea4f; pointer-events: none;">
+                    <div style="border-right: 4px solid #00ea4f; padding-right: 25px; background: rgba(5,7,6,0.6); padding-left: 15px; padding-top: 15px; padding-bottom: 15px; border-radius: 4px 0 0 4px;">
+                        <span id="alt-val" style="font-size: 3.8rem; font-weight: bold; font-family: 'Share Tech Mono', sans-serif;">--</span><br>
+                        <span style="font-size: 1.05rem; letter-spacing: 5px; opacity: 0.85;">ALTITUDE (m)</span>
                     </div>
                 </div>
 
-                <div id="holotable-controls" style="display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
-                    <button class="btn-primary" id="return-2d-btn" style="background: rgba(0,0,0,0.8); border: 1px solid #ff3333; color: #ff3333; padding: 10px 20px;">COLLAPSE 3D MESH</button>
+                <div id="holotable-controls" style="display: none; position: absolute; bottom: 35px; left: 50%; transform: translateX(-50%); z-index: 1000;">
+                    <button class="btn-primary btn-danger" id="return-2d-btn">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L8.7 16.71l-5.3-5.3-1.41 1.41L8.7 19.54l11.71-11.71z"/></svg>
+                        DISENGAGE 3D TOPOGRAPHY
+                    </button>
                 </div>
             </div>
             
             <div id="splitter"></div>
 
-            <div id="sidebar" style="flex: 0 0 auto; width: 350px; min-width: 250px; max-width: 800px; background: #050706; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; border-left: 1px solid #384d3c;">
+            <div id="sidebar" style="flex: 0 0 auto; width: 400px; min-width: 250px; max-width: 800px; background: #050706; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; border-left: 1px solid #142417; box-sizing: border-box;">
+                
                 <div class="panel">
-                    <div class="panel-title">LIVE TELEMETRY</div>
-                    <div class="telemetry-grid">
-                        <div><div class="data-label">STATUS</div><div id="tel-status" class="data-value" style="color: #66aa99;">STANDBY</div></div>
-                        <div><div class="data-label">CONFIDENCE</div><div id="tel-conf" class="data-value">--%</div></div>
+                    <div class="panel-title">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19.03 7.39l1.42-1.42c-.45-.51-.9-.97-1.41-1.41L17.62 6c-1.71-1.92-4.16-3-6.62-3-5.52 0-10 4.48-10 10s4.48 10 10 10c2.46 0 4.91-1.08 6.62-3l1.42 1.42c.51-.45.97-.9 1.41-1.41l-1.42-1.42c1.92-1.71 3-4.16 3-6.62 0-2.46-1.08-4.91-3-6.62zM11 20c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+                        TELEMETRY OVERWATCH
                     </div>
-                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px dotted #384d3c;">
-                        <div class="data-label">TARGET COORDINATES</div>
-                        <div id="tel-coords" class="data-value" style="font-size: 1.2rem;">NO LOCK</div>
+                    <div style="padding: 22px; font-size: 1.1rem; box-sizing: border-box;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px dashed #1c3823; padding-bottom: 12px;">
+                            <span style="color: #66aa99;">TRACK STAT:</span> 
+                            <span id="tel-status" style="color: #00ea4f; font-weight: bold; text-shadow: 0 0 5px #00ea4f;">STANDBY</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px dashed #1c3823; padding-bottom: 12px;">
+                            <span style="color: #66aa99;">FUSION CONF:</span> 
+                            <span id="tel-conf" style="font-weight: bold; color: #00ea4f;">--%</span>
+                        </div>
+                        <div style="margin-top: 25px; background: rgba(0,0,0,0.65); padding: 18px; border: 1px solid #1c3823; border-radius: 4px; box-shadow: inset 0 2px 8px #000;">
+                            <span style="color: #66aa99; font-size: 0.85rem; letter-spacing: 1px;">LOCK COORD RECT:</span><br>
+                            <span id="tel-coords" style="font-size: 1.45rem; font-weight: bold; color: #00a5ff; text-shadow: 0 0 8px #00a5ff; letter-spacing: 1px;">NO LOCK</span>
+                        </div>
                     </div>
                 </div>
 
-                <div id="mission-feed" style="flex: 1; overflow-y: auto;">
-                    <div class="panel-title">MISSION FEED</div>
+                <div class="panel" style="flex: 1; display: flex; flex-direction: column; min-height: 200px;">
+                    <div class="panel-title">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                        OPERATIONAL MISSION FEED
+                    </div>
+                    <div id="mission-feed" style="flex: 1; overflow-y: auto; padding: 20px; font-size: 0.95rem; line-height: 1.6; box-sizing: border-box;"></div>
                 </div>
-                <div style="padding-top: 10px; flex-shrink: 0;">
-                    <button class="btn-primary" onclick="clearMap()" style="width: 100%;">PURGE TRACKS</button>
+                
+                <div style="padding-top: 15px; flex-shrink: 0;">
+                    <button class="btn-primary" style="width: 100%;" onclick="clearMap()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;"><path d="M15 16h4v2h-4zm0-8h7v2h-7zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zM14 5h-3l-1-1H6L5 5H2v2h12z"/></svg>
+                        PURGE ACTIVE TRACK LOGS
+                    </button>
                 </div>
             </div>
         </div>
@@ -193,15 +410,25 @@
 
     <div id="uav-modal">
         <div class="uav-header">
-            <span>🔴 LIVE UAV OPTICAL FEED // FLIR-07</span>
-            <span class="close-btn" onclick="toggleUAV()">X</span>
+            <span style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 10px; height: 10px; background: #fff; border-radius: 50%; animation: radarPulse 1s infinite steps(6); box-shadow: 0 0 8px #fff;"></div>
+                LIVE UAV SURVEILLANCE FEED // EO-IR-FLIR07
+            </span>
+            <span class="close-btn" onclick="toggleUAV()">✖</span>
         </div>
-        <img id="drone-feed" src="/api/video_feed" alt="AWAITING VIDEO STREAM..." style="width: 100%; height: 100%; object-fit: cover; flex-grow: 1; background: #111;">
+        <div style="flex: 1; background: #000; position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; border: 1px dashed rgba(255,255,255,0.25); border-radius: 50%; pointer-events: none;"></div>
+            <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.2); pointer-events: none;"></div>
+            <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.2); pointer-events: none;"></div>
+            
+            <img id="drone-feed" src="/api/video_feed" alt="AWAITING SECURE LINK STREAM..." style="width: 100%; height: 100%; object-fit: cover;">
+        </div>
     </div>
 
     <script src="/static/js/three.min.js"></script>
     <script src="/static/js/holotable.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/static/js/map_loader.js"></script>
+
 </body>
 </html>
