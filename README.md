@@ -5,6 +5,24 @@
 ![Network](https://img.shields.io/badge/NETWORK-AIR--GAPPED-ff3333?style=for-the-badge)
 ![Vision](https://img.shields.io/badge/VISION-YOLOv8--SMALL-blue?style=for-the-badge)
 
+## CURRENT PROJECT STATUS
+TRIC is an active development prototype with the complete application structure present in the workspace. The project currently contains 141 application files across 39 directories, excluding virtual environments, Python caches, and test caches.
+
+### Repository Contents
+* **`/backend`**: API routes, WebSocket management, detection, confirmation, orchestration, simulation, surveillance, tracking, models, logging, and utilities.
+* **`/frontend`**: HTML templates, offline map geometry, image assets, sensor icons, CSS themes, and JavaScript modules for the dashboard, map, alerts, incident table, path animation, sensor rendering, video, and Three.js visualization.
+* **`/data`**: Sensor and incident JSON data, the local SQLite database (`tric.db`), and offline map tiles.
+* **`/config`**: Application settings.
+* **Root files**: Application entry points, map fetching, requirements, tests, documentation, and the YOLOv8 model.
+
+### Current Runtime
+* **API framework**: FastAPI with Uvicorn.
+* **Application entry point**: `python run_tric.py`.
+* **Dashboard**: `http://127.0.0.1:8000/`.
+* **Static files**: Served from `frontend/static` at `/static`.
+* **Working tree changes**: `requirements.txt` contains the FastAPI/Uvicorn dependencies, and `run_tric.py` serves the dashboard and sensor API.
+* **Local-only data**: `data/tric.db` is present in the workspace but is intentionally ignored by Git.
+
 ## MISSION OVERVIEW
 TRIC is a highly modular, locally-hosted Command, Control, Communications, Computers, Intelligence, Surveillance, and Reconnaissance (C4ISR) dashboard. It is engineered to fuse multi-node IoT sensor telemetry with live, AI-processed UAV optical feeds to track, classify, and intercept border intrusions in real-time.
 
