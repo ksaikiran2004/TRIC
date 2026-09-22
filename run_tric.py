@@ -6,6 +6,7 @@ and hosts the API/WebSocket routes.
 
 import uvicorn
 from fastapi import FastAPI, WebSocket
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -16,6 +17,25 @@ from backend.simulation.sensor_generator import generate_sensor_network
 
 # Initialize the App
 app = FastAPI(title="TRIC Tactical Command")
+
+TEMPLATE_DIR = Path(__file__).parent / "frontend" / "templates"
+
+@app.get("/")
+async def dashboard():
+    return FileResponse(TEMPLATE_DIR / "dashboard.html")
+
+@app.get("/api/sensors")
+async def get_sensors():
+    return [
+        {
+            "id": sensor.id,
+            "type": sensor.sensor_type.value,
+            "lat": sensor.latitude,
+            "lon": sensor.longitude,
+            "status": sensor.status.value,
+        }
+        for sensor in sensors
+    ]
 
 # 1. Mount Static Files (Critical for CSS and JS to load)
 # Points to your 'frontend' folder at the root of the project
@@ -40,5 +60,4 @@ async def tactical_websocket(websocket: WebSocket):
         manager.disconnect(websocket)
 
 if __name__ == "__main__":
-    # Ensure this points to the correct file name (e.g., 'backend.main:app')
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("run_tric:app", host="0.0.0.0", port=8000, reload=True)
