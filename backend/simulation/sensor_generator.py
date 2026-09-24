@@ -246,17 +246,29 @@ def generate_sensor_network(
 # DATABASE PERSISTENCE INTEGRATION
 # =========================================================
 
-def save_sensors_to_db(sensors: List[Sensor]):
+def save_sensors_to_db(sensors: List[Sensor], db_path: str = None):
     """Locks the generated tactical sensor network into persistent SQLite storage."""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(current_dir, '../../'))
-    db_path = os.path.join(project_root, 'data', 'tric.db')
+    if db_path is None:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_dir, '../../'))
+        db_path = os.path.join(project_root, 'data', 'tric.db')
 
     # Ensure the data directory exists
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
 
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sensors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL
+        )
+        """
+    )
 
     # Clear old deployment to prevent stacking ghosts on rerun
     cursor.execute("DELETE FROM sensors")
@@ -264,15 +276,47 @@ def save_sensors_to_db(sensors: List[Sensor]):
     # Extract data from Sensor objects
     sensor_data = []
     for s in sensors:
-        stype_name = s.sensor_type.name if hasattr(s.sensor_type, 'name') else str(s.sensor_type)
+        stype_name = s.sensor_type.name.lower() if hasattr(s.sensor_type, 'name') else str(s.sensor_type).lower()
         sensor_data.append((stype_name, 'ACTIVE', s.latitude, s.longitude))
 
     # Bulk insert for maximum performance
     cursor.executemany("INSERT INTO sensors (type, status, lat, lon) VALUES (?, ?, ?, ?)", sensor_data)
-    
+
     conn.commit()
     print(f"[SUCCESS] {len(sensors)} sensors locked into the command database.")
     conn.close()
+
+
+def ensure_sensor_database(db_path: str = None, geojson_file: str = "frontend/geo/border_line.geojson") -> List[Sensor]:
+    """Ensure the SQLite sensor store exists and is populated before serving map data."""
+    if db_path is None:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_dir, '../../'))
+        db_path = os.path.join(project_root, 'data', 'tric.db')
+
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sensors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL
+        )
+        """
+    )
+    count = cursor.execute("SELECT COUNT(*) FROM sensors").fetchone()[0]
+    conn.close()
+
+    if count == 0:
+        sensors = generate_sensor_network(geojson_file)
+        save_sensors_to_db(sensors, db_path=db_path)
+        return sensors
+
+    return []
 
 
 if __name__ == "__main__":

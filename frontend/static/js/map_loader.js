@@ -51,6 +51,76 @@ function toggleUAV() {
     }
 }
 
+async function refreshVideoSourceStatus() {
+    const input = document.getElementById('rtsp-source-input');
+    const status = document.getElementById('rtsp-status');
+    if (!input || !status) return;
+
+    try {
+        const response = await fetch('/api/video_source');
+        const data = await response.json();
+        const source = data && data.source ? data.source : '';
+        if (source) {
+            input.value = source;
+            status.textContent = `LIVE FEED SOURCE: ${source}`;
+        }
+    } catch (err) {
+        console.warn('[TRIC] Unable to load current stream source:', err);
+    }
+}
+
+async function applyVideoSource() {
+    const input = document.getElementById('rtsp-source-input');
+    const status = document.getElementById('rtsp-status');
+    const feed = document.getElementById('drone-feed');
+    if (!input || !status) return;
+
+    const source = input.value.trim();
+    if (!source) {
+        status.textContent = 'LIVE FEED SOURCE: EMPTY — enter an RTSP/HTTP URL';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/video_source', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source })
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Unable to set video source.');
+        }
+
+        status.textContent = `LIVE FEED SOURCE: ${data.source}`;
+        if (feed) {
+            feed.src = `/api/video_feed?ts=${Date.now()}`;
+        }
+    } catch (err) {
+        status.textContent = `LIVE FEED SOURCE: ERROR — ${err.message}`;
+        console.error('[TRIC] Video source update failed:', err);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    refreshVideoSourceStatus();
+
+    const applyBtn = document.getElementById('apply-rtsp-btn');
+    if (applyBtn) {
+        applyBtn.addEventListener('click', applyVideoSource);
+    }
+
+    const input = document.getElementById('rtsp-source-input');
+    if (input) {
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                applyVideoSource();
+            }
+        });
+    }
+});
+
 function initSplitter() {
     const splitter = document.getElementById('splitter');
     const sidebar = document.getElementById('sidebar');

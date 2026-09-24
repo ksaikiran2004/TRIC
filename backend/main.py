@@ -12,6 +12,11 @@ import json
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from backend.config import Config
+from backend.cameras.camera_manager import CameraManager
+from backend.correlation.cross_camera_linking import CrossCameraLinker
+from backend.evidence.blockchain_audit import BlockchainAuditLogger
+from backend.intelligence.risk_scoring import ThreatRiskScorer
+from backend.intelligence.threat_validation import ThreatValidator
 from backend.simulation.sensor_generator import generate_sensor_network
 from backend.confirmation.multi_sensor_confirmation import MultiSensorConfirmation
 from backend.confirmation.alert_engine import AlertEngine
@@ -29,13 +34,20 @@ app = FastAPI(title="TRIC Command Center")
 active_connections = []
 event_manager = None
 controller = None
+runtime_sensors = []
+camera_manager = CameraManager()
+cross_camera_linker = CrossCameraLinker()
+blockchain_logger = BlockchainAuditLogger()
+intelligence_scorer = ThreatRiskScorer()
+intelligence_validator = ThreatValidator()
 
 @app.on_event("startup")
 async def startup_event():
-    global event_manager, controller
+    global event_manager, controller, runtime_sensors
     
     # --- Initialize Core Components ---
     sensors = generate_sensor_network()
+    runtime_sensors = sensors
     confirmation = MultiSensorConfirmation()
     alert_engine = AlertEngine(sensors)
     tracker = IntrusionTracker()
@@ -58,17 +70,52 @@ async def startup_event():
             return
 
         direction = direction_classifier.classify(path)
-        
+
         event_manager.process(
             tracks=[track],
             paths=[path],
             directions=[direction]
         )
 
-        # Logging
-        events = event_manager.get_active_events()
-        for event in events:
+        # CCTV-first intelligence processing
+        for camera in sensors:
+            camera_manager.register_camera(
+                camera_id=f"sensor-{camera.id}",
+                source=f"sensor:{camera.sensor_type.value}",
+                metadata={
+                    "sensor_type": camera.sensor_type.value,
+                    "lat": camera.latitude,
+                    "lon": camera.longitude,
+                    "status": camera.status.value,
+                },
+            )
+
+        active_events = event_manager.get_active_events()
+        for event in active_events:
             incident_logger.log_event(event)
+
+            activity_context = {
+                "entity_type": "vehicle",
+                "camera_count": max(1, len(sensors)),
+                "confidence": float(getattr(event, "confidence", 0.0)),
+                "direction": getattr(event, "direction", "UNKNOWN"),
+                "vehicle_whitelisted": False,
+            }
+            risk_score = intelligence_scorer.score(
+                entity_type=activity_context["entity_type"],
+                camera_count=activity_context["camera_count"],
+                confidence=activity_context["confidence"],
+                directory_change=(activity_context["direction"] not in {"UNKNOWN", "STATIONARY"}),
+                context=activity_context,
+            )
+            validation = intelligence_validator.validate(risk_score, {"event_id": event.event_id})
+            blockchain_logger.append({
+                "event_id": event.event_id,
+                "risk_score": risk_score,
+                "decision": validation["decision"],
+                "source": "camera-intelligence-pipeline",
+                "timestamp": event.timestamp,
+            })
 
     # --- Initialize Controller ---
     controller = SimulationController(
@@ -94,13 +141,22 @@ async def broadcast_tactical_data():
             events = event_manager.get_active_events()
             for event in events:
                 # Safely extract data based on your event object structure
+                    risk_score = intelligence_scorer.score(
+                    entity_type="vehicle",
+                    camera_count=max(1, len(runtime_sensors)),
+                    confidence=float(getattr(event, "confidence", 0.0)),
+                    direction_change=(getattr(event, "direction", "UNKNOWN") not in {"UNKNOWN", "STATIONARY"}),
+                    context={"vehicle_whitelisted": False},
+                )
                 payload = {
                     "event_id": getattr(event, "event_id", "EVT_01"),
                     "track_id": getattr(event, "track_id", "TRK_01"),
                     "location": getattr(event, "location", [34.0, 74.0]),
                     "direction": getattr(event, "direction", "UNKNOWN"),
                     "speed": getattr(event, "speed", 0.0),
-                    "status": getattr(event, "status", "ACTIVE")
+                    "status": getattr(event, "status", "ACTIVE"),
+                    "risk_score": round(risk_score, 3),
+                    "camera_count": len(runtime_sensors),
                 }
                 # Broadcast to all connected UI dashboards
                 for connection in active_connections:

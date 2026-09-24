@@ -3,10 +3,20 @@ import os
 import cv2
 import sqlite3
 import time
-from flask import Flask, jsonify, render_template, send_from_directory, Response
+from flask import Flask, jsonify, render_template, send_from_directory, Response, request
+
+from backend.cameras.camera_manager import CameraManager
+from backend.correlation.cross_camera_linking import CrossCameraLinker
+from backend.evidence.blockchain_audit import BlockchainAuditLogger
+from backend.intelligence.risk_scoring import ThreatRiskScorer
+from backend.intelligence.threat_validation import ThreatValidator
 
 # Import the new YOLO Vision Engine
+from backend.simulation.sensor_generator import ensure_sensor_database
 from backend.vision_processor import TacticalVisionProcessor
+
+DEFAULT_VIDEO_SOURCE = os.getenv('TRIC_VIDEO_SOURCE', 'rtsp://192.168.1.19:8554/')
+VIDEO_SOURCE = DEFAULT_VIDEO_SOURCE
 
 
 def normalize_rtsp_url(source):
@@ -35,6 +45,25 @@ def normalize_rtsp_url(source):
     return text
 
 
+def set_video_source(raw_source):
+    """Set the live RTSP/HTTP source used by the drone feed and AI pipeline."""
+    if raw_source is None:
+        raise ValueError('RTSP source cannot be empty.')
+
+    value = str(raw_source).strip()
+    if not value:
+        raise ValueError('RTSP source cannot be empty.')
+
+    normalized_source = normalize_rtsp_url(value)
+    if not normalized_source or normalized_source.lower() in {'demo', 'demo-video', 'default'}:
+        normalized_source = 'demo'
+
+    global VIDEO_SOURCE
+    VIDEO_SOURCE = normalized_source
+    os.environ['TRIC_VIDEO_SOURCE'] = normalized_source
+    return normalized_source
+
+
 def resolve_video_source():
     """
     Resolve the active camera feed source.
@@ -42,16 +71,15 @@ def resolve_video_source():
     Supported values:
       - unset / demo / default -> local demo video
       - 0 / webcam -> local webcam
-      - URL like rtsp://... or http://... -> IP camera / drone RTSP stream
+      - URL like rtsp://... or http://... -> IP camera / drone stream
       - local file path -> any mp4 or image/video file
     """
     demo_path = os.path.join(os.path.dirname(__file__), 'demo_video.mp4')
-    default_source = 'rtsp://172.16.28.67:8554/'
-    raw_source = os.getenv('TRIC_VIDEO_SOURCE', default_source).strip()
+    raw_source = os.getenv('TRIC_VIDEO_SOURCE', VIDEO_SOURCE).strip()
     raw_source = normalize_rtsp_url(raw_source)
 
     if not raw_source or raw_source.lower() in {'demo', 'demo-video', 'default'}:
-        return demo_path if os.path.exists(demo_path) else default_source
+        return demo_path if os.path.exists(demo_path) else DEFAULT_VIDEO_SOURCE
 
     source = raw_source.lower()
     if source in {'0', 'webcam', 'camera', 'local-webcam'}:
@@ -70,9 +98,17 @@ app = Flask(__name__,
 # Initialize the AI Engine globally so it doesn't reload on every frame
 print(">>> [TRIC-CORE] BOOTING AI VISION SUBSYSTEM...")
 vision_engine = TacticalVisionProcessor()
+camera_manager = CameraManager()
+cross_camera_linker = CrossCameraLinker()
+blockchain_logger = BlockchainAuditLogger()
+threat_risk_scorer = ThreatRiskScorer()
+threat_validator = ThreatValidator()
 
 def get_db_path():
     return os.path.abspath(os.path.join(os.path.dirname(__file__), 'data', 'tric.db'))
+
+
+ensure_sensor_database(db_path=get_db_path())
 
 # ==========================================
 # ROUTE 1: PRIMARY DASHBOARD UI
@@ -87,6 +123,7 @@ def index():
 @app.route('/api/sensors')
 def api_get_sensors():
     try:
+        ensure_sensor_database(db_path=get_db_path())
         conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         cursor.execute("SELECT id, type, lat, lon FROM sensors")
@@ -141,6 +178,26 @@ def video_feed():
             time.sleep(0.033)
 
     return Response(generate_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/api/video_source', methods=['GET'])
+def api_get_video_source():
+    return jsonify({"source": resolve_video_source(), "status": "ok"})
+
+
+@app.route('/api/video_source', methods=['POST'])
+def api_set_video_source():
+    payload = request.get_json(silent=True) or {}
+    source = payload.get('source', '').strip()
+    if not source:
+        return jsonify({"error": "RTSP source URL is required."}), 400
+
+    try:
+        updated_source = set_video_source(source)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    return jsonify({"source": updated_source, "status": "updated"})
 
 # ==========================================
 # ROUTE 4: AIR-GAPPED MAP TILE SERVER
